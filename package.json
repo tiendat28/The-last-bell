@@ -1,0 +1,23 @@
+{
+  "name": "sinh-ton-the-last-bell",
+  "version": "1.0.0",
+  "description": "Sinh Tồn 3D - Web Game Ma Sói Học Đường nhiều người chơi",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n \"SERVER,CLIENT\" -c \"cyan,magenta\" \"npm run dev -w packages/server\" \"npm run dev -w packages/client\"",
+    "dev:server": "npm run dev -w packages/server",
+    "dev:client": "npm run dev -w packages/client",
+    "build": "npm run build -w @sinh-ton/shared && npm run build -w @sinh-ton/client && npm run build -w @sinh-ton/server",
+    "build:client": "npm run build -w @sinh-ton/shared && npm run build -w @sinh-ton/client",
+    "start": "npm run start -w @sinh-ton/server"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "^5.7.3"
+  }
+}
+

@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>SINH TỒN 3D - Tiếng Chuông Cuối Cùng</title>
+  <link rel="stylesheet" href="/src/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Canvas 3D -->
+  <div id="game-container"></div>
+
+  <!-- HUD Overlay -->
+  <div id="hud-overlay">
+    <!-- Cột Trái: Thông tin nhân vật & Danh sách học sinh -->
+    <div class="hud-left-column">
+      <!-- Top-Left: Player Info & HP Bar -->
+      <div class="hud-card player-info-card">
+        <div class="player-header">
+          <span class="player-role-badge" id="hud-role">ĐANG VÀO PHÒNG</span>
+          <span class="player-name" id="hud-player-name">Đang kết nối...</span>
+        </div>
+        <div class="hp-container">
+          <div class="hp-bar-outer">
+            <div class="hp-bar-inner" id="hud-hp-bar" style="width: 100%;"></div>
+          </div>
+          <div class="hp-text" id="hud-hp-text">100 / 100 HP</div>
+        </div>
+      </div>
+
+      <!-- Left Center: Danh Sách Học Sinh Trong Trường & Trạng Thái Sống / Chết -->
+      <div class="hud-card player-list-card" id="player-list-card">
+        <div class="player-list-header">
+          <span class="player-list-title">📋 HỌC SINH</span>
+          <span class="player-list-counter" id="hud-alive-count">0/0</span>
+        </div>
+        <div class="player-list-scroll" id="player-list-items"></div>
+      </div>
+    </div>
+
+    <!-- Top-Center: Game Phase Timer -->
+    <div class="hud-card phase-timer-card" id="phase-timer-card">
+      <div class="phase-icon" id="phase-icon">⏳</div>
+      <div class="phase-info">
+        <div class="phase-name" id="phase-name">SẢNH CHỜ TRẬN ĐẤU</div>
+        <div class="phase-countdown" id="phase-countdown">00:00</div>
+      </div>
+    </div>
+
+    <!-- Cột Phải: Trạng thái phòng -> Bản đồ nhỏ -> Khung Trò chuyện nằm ngay dưới bản đồ nhỏ -->
+    <div class="hud-right-column">
+      <!-- Top-Right: Game & Server Status -->
+      <div class="hud-card server-info-card">
+        <div class="status-indicator">
+          <span class="pulse-dot" id="hud-status-dot"></span>
+          <span id="hud-server-status">Kết nối...</span>
+        </div>
+        <div class="stat-row">
+          <span>🔑 Mã Phòng:</span>
+          <strong id="hud-room-id" class="copy-room-id">ROOM-0000</strong>
+          <button id="btn-copy-invite" class="mini-copy-btn" title="Sao chép link mời bạn bè">📋 MỜI</button>
+        </div>
+        <div class="stat-row">
+          <span>👥 Học sinh:</span>
+          <strong id="hud-online-count">1</strong>
+        </div>
+        <div class="stat-row">
+          <span>📍 Tọa độ:</span>
+          <span id="hud-coords">X: 0 | Z: 0</span>
+        </div>
+        <div class="stat-row">
+          <span>🔮 Tâm kết giới:</span>
+          <span id="hud-distance">0.0m / 300m</span>
+        </div>
+        
+        <!-- Control Buttons -->
+        <button id="btn-start-game" class="game-btn primary mini-btn">BẮT ĐẦU TRẬN ĐẤU</button>
+        
+        <div class="bot-control-row" id="bot-control-row">
+          <button id="btn-fill-bots" class="bot-btn" title="Lấp đầy Bot theo số lượng phòng">🤖 LẤP ĐẦY BOT</button>
+          <button id="btn-add-bot" class="bot-btn" title="Thêm 1 Bot">+1 BOT</button>
+          <button id="btn-clear-bots" class="bot-btn danger" title="Xóa toàn bộ Bot">XÓA BOT</button>
+        </div>
+      </div>
+
+      <!-- Middle-Right: Radar Minimap 2D -->
+      <div class="hud-card minimap-card" id="minimap-card">
+        <div class="minimap-header">
+          <span class="minimap-title">📡 BẢN ĐỒ TRƯỜNG HỌC</span>
+          <span class="minimap-area" id="minimap-area-name">Sân Trường Trung Tâm</span>
+        </div>
+        <div class="minimap-wrapper">
+          <canvas id="minimap-canvas" width="160" height="160"></canvas>
+        </div>
+      </div>
+
+      <!-- Bottom-Right (Dưới Map Nhỏ): Real-time Chat Box cỡ chữ nhỏ gọn -->
+      <div class="hud-card chat-card" id="chat-card">
+        <div class="chat-header">
+          <span>💬 TRÒ CHUYỆN</span>
+          <div class="audio-status-group" id="audio-status-group">
+            <span class="speaker-status on" id="speaker-status" title="Trạng thái Loa">🔊 Loa: Bật</span>
+            <span class="mic-status on" id="mic-status" title="Trạng thái Mic (Chạm để bật/tắt)">🎙️ Mic: Bật</span>
+          </div>
+        </div>
+        <div class="chat-messages" id="chat-messages">
+          <div class="chat-msg system">Chào mừng bạn đến với Ma Sói Học Đường 3D!</div>
+        </div>
+        <div class="chat-input-row">
+          <input type="text" id="chat-input" placeholder="Nhập tin nhắn..." maxlength="80" autocomplete="off" />
+          <button id="btn-chat-send" class="chat-send-btn">Gửi</button>
+        </div>
+      </div>
+
+      <!-- Nút Chức Năng Đêm (Tiên Tri, Bảo Vệ, Phù Thủy, Bác Sĩ) nhỏ gọn ngay dưới khung Trò Chuyện -->
+      <div id="special-role-panel" class="special-role-panel hidden">
+        <button id="btn-open-role-skill" class="game-btn special-btn">
+          <span id="role-skill-icon">🔮</span>
+          <span id="role-skill-label">DÙNG KỸ NĂNG ĐÊM</span>
+        </button>
+      </div>
+
+      <!-- Nút Hành Động Sói Cắn nhỏ gọn ngay dưới khung Trò Chuyện -->
+      <div id="action-container" class="action-container hidden">
+        <button id="btn-action" class="action-btn">
+          <span class="action-icon" id="action-icon">🐺</span>
+          <span class="action-text" id="action-text">KÍCH HOẠT</span>
+        </button>
+        <div class="action-hint" id="action-hint">Nhấn phím F hoặc chạm vào nút</div>
+      </div>
+    </div>
+
+    <!-- Center: NPC Loa Quản Trò Announcement -->
+    <div id="announcement-banner" class="announcement-banner hidden">
+      <div class="announcement-speaker-icon">📢</div>
+      <div class="announcement-body">
+        <h4 id="announcement-title">LOA THÔNG BÁO TRƯỜNG HỌC</h4>
+        <p id="announcement-content">Nội dung thông báo...</p>
+      </div>
+    </div>
+
+    <!-- Center Warning: Outside Barrier -->
+    <div id="barrier-warning" class="warning-banner hidden">
+      <div class="warning-icon">⚠️</div>
+      <div class="warning-content">
+        <h3>CẢNH BÁO: NGOÀI KẾT GIỚI!</h3>
+        <p>Bạn đang chịu sát thương tâm linh <strong>-10 HP/giây</strong>. Mau quay lại vòng an toàn 300m!</p>
+      </div>
+    </div>
+
+    <!-- Screen Vignette Damage Effect -->
+    <div id="damage-vignette" class="damage-vignette hidden"></div>
+
+    <!-- Bottom Center Compass -->
+    <div class="barrier-indicator-compass">
+      <div class="compass-label">BÁN KÍNH KẾT GIỚI: 300 MÉT</div>
+    </div>
+
+    <!-- Top-Center: Trạng Thái Đồng Thuận Bầy Sói Trong Đêm -->
+    <div id="wolf-pack-panel" class="hud-card wolf-pack-panel hidden">
+      <div class="wolf-pack-header">
+        <span class="wolf-icon">🐺</span>
+        <span id="wolf-pack-status">BẦY SÓI: CHƯA THỐNG NHẤT MỤC TIÊU</span>
+      </div>
+      <div id="wolf-pack-votes" class="wolf-pack-votes"></div>
+    </div>
+  </div>
+
+  <!-- Modal Tiên Tri (Soi Danh Tính) -->
+  <div id="seer-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-badge">KỸ NĂNG TIÊN TRI</div>
+      <h2 class="modal-title">🔮 SOI DANH TÍNH TRONG ĐÊM</h2>
+      <p class="modal-desc">Chọn 1 học sinh bất kỳ để thấu thị thân phận thực sự của người đó:</p>
+      <div class="vote-player-list" id="seer-player-list"></div>
+      <div id="seer-result-box" class="seer-result-box hidden">
+        <h3 id="seer-result-text">KẾT QUẢ SOI: ...</h3>
+      </div>
+      <div class="vote-actions">
+        <button id="btn-close-seer" class="game-btn secondary">ĐÓNG</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Bảo Vệ (Khiên Che Chắn) -->
+  <div id="bodyguard-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-badge">KỸ NĂNG BẢO VỆ</div>
+      <h2 class="modal-title">🛡️ CHỌN NGƯỜI BẢO VỆ</h2>
+      <p class="modal-desc">Chọn 1 người để bảo vệ khỏi Sói đêm nay (Không được chọn người của đêm trước):</p>
+      <div class="vote-player-list" id="bodyguard-player-list"></div>
+      <div class="vote-actions">
+        <button id="btn-bodyguard-skip" class="game-btn secondary">KHÔNG BẢO VỆ AI ĐÊM NAY</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Phù Thủy (Bình Cứu & Bình Độc) -->
+  <div id="witch-modal" class="modal-overlay hidden">
+    <div class="modal-card witch-card">
+      <div class="modal-badge">KỸ NĂNG PHÙ THỦY</div>
+      <h2 class="modal-title">🧙 DƯỢC PHÒNG PHÙ THỦY</h2>
+      <p class="modal-desc">Bạn sở hữu 2 bình thuốc dùng 1 lần duy nhất trong cả trận đấu:</p>
+
+      <div id="witch-heal-section" class="potion-section hidden">
+        <div class="potion-alert">⚠️ Học sinh <strong id="witch-victim-name">...</strong> vừa bị Ma Sói cắn trong đêm!</div>
+        <button id="btn-witch-heal" class="game-btn primary heal-btn">💉 DÙNG BÌNH CỨU (HỒI SINH NẠN NHÂN)</button>
+      </div>
+
+      <div class="potion-section" id="witch-poison-section">
+        <h4>☠️ SỬ DỤNG BÌNH ĐỘC (HẠ SÁT 1 NGƯỜI):</h4>
+        <div class="vote-player-list" id="witch-poison-list"></div>
+      </div>
+
+      <div class="vote-actions">
+        <button id="btn-close-witch" class="game-btn secondary">XÁC NHẬN & ĐÓNG</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Thợ Săn Nổ Súng (Hunter Revenge) -->
+  <div id="hunter-modal" class="modal-overlay hidden">
+    <div class="modal-card hunter-card">
+      <div class="modal-badge">PHÁT SÚNG THỢ SĂN</div>
+      <h2 class="modal-title">💥 PHÁT SÚNG CUỐI CÙNG</h2>
+      <p class="modal-desc">Bạn vừa bị loại khỏi trường học! Hãy chọn 1 người bất kỳ để nổ súng kéo theo chết cùng:</p>
+      <div class="vote-player-list" id="hunter-target-list"></div>
+      <div class="vote-actions">
+        <button id="btn-hunter-skip" class="game-btn secondary">BUÔNG SÚNG (KHÔNG BẮN AI)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Voting Modal (Ban Ngày) -->
+  <div id="voting-modal" class="modal-overlay hidden">
+    <div class="modal-card voting-card">
+      <div class="modal-badge">PHIÊN BỎ PHIẾU BAN NGÀY</div>
+      <h2 class="modal-title">CHỈ ĐỊNH MA SÓI</h2>
+      <p class="modal-desc">Hãy thảo luận và chọn 1 học sinh đáng ngờ nhất để đưa ra xử phạt:</p>
+      <div class="vote-player-list" id="vote-player-list"></div>
+      <div class="vote-actions">
+        <button id="btn-vote-skip" class="game-btn secondary">BỎ PHIẾU TRẮNG</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Role Guide Modal -->
+  <div id="role-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-badge" id="role-guide-badge">HƯỚNG DẪN VAI TRÒ</div>
+      <h2 class="modal-title" id="role-guide-title">MA SÓI</h2>
+      <p class="modal-desc" id="role-guide-desc">Hướng dẫn chi tiết nhiệm vụ và kỹ năng của bạn...</p>
+      <button id="btn-close-role-guide" class="game-btn primary">ĐÃ HIỂU NHIỆM VỤ</button>
+    </div>
+  </div>
+
+  <!-- Game Over Screen -->
+  <div id="death-screen" class="death-overlay hidden">
+    <div class="death-box">
+      <h1 class="death-title" id="game-over-title">BẠN ĐÃ BỊ LOẠI</h1>
+      <p class="death-reason" id="game-over-reason">Bạn đã bị nuốt chửng linh hồn!</p>
+      <button id="btn-respawn" class="game-btn primary">QUAN SÁT TIẾP TRẬN ĐẤU (HỒN MA)</button>
+    </div>
+  </div>
+
+  <!-- Room Lobby Modal (Tạo Phòng / Vào Phòng / Chơi Với Máy) -->
+  <div id="join-modal" class="modal-overlay">
+    <div class="modal-card room-lobby-card">
+      <div class="lobby-header">
+        <div class="modal-badge">TIẾNG CHUÔNG CUỐI CÙNG</div>
+        <h2 class="modal-title">SINH TỒN 3D - SẢNH PHÒNG</h2>
+      </div>
+
+      <!-- Tab Buttons -->
+      <div class="room-tabs">
+        <button id="tab-btn-create" class="tab-btn active">➕ TẠO PHÒNG MỚI</button>
+        <button id="tab-btn-join" class="tab-btn">🚪 VÀO PHÒNG CÓ SẴN</button>
+      </div>
+
+      <!-- Tab 1: Tạo phòng mới -->
+      <div id="tab-content-create" class="tab-content">
+        <div class="room-form-grid">
+          <div class="form-group">
+            <label for="create-nickname">👤 Tên học sinh:</label>
+            <input type="text" id="create-nickname" placeholder="Nhập tên..." maxlength="15" autocomplete="off" />
+          </div>
+
+          <div class="form-group">
+            <label for="create-room-name">🏫 Tên phòng:</label>
+            <input type="text" id="create-room-name" value="Lớp Học Nửa Đêm" maxlength="20" autocomplete="off" />
+          </div>
+
+          <div class="form-group mode-group">
+            <label for="select-room-mode">🎭 Chế độ phân vai:</label>
+            <select id="select-room-mode" class="custom-select">
+              <option value="STANDARD_9_13" selected>🏫 Tiêu Chuẩn 9 - 13 Người (3 Sói, Tri, Vệ, Thủy, Săn)</option>
+              <option value="LARGE_14_16">🏛️ Đại Trường 14 - 16 Người (4 Sói, Tri, Vệ, Thủy, Săn)</option>
+            </select>
+          </div>
+
+          <div class="form-group count-group">
+            <label for="select-target-count">👥 Số lượng học sinh:</label>
+            <select id="select-target-count" class="custom-select">
+              <option value="9">9 Học sinh</option>
+              <option value="10" selected>10 Học sinh (Khuyên dùng)</option>
+              <option value="11">11 Học sinh</option>
+              <option value="12">12 Học sinh</option>
+              <option value="13">13 Học sinh</option>
+              <option value="14">14 Học sinh (Chế độ lớn)</option>
+              <option value="15">15 Học sinh</option>
+              <option value="16">16 Học sinh</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="room-form-footer">
+          <div class="form-group checkbox-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="check-enable-bots" checked />
+              <span class="custom-checkbox"></span>
+              <span>🤖 Chơi với Máy (Tự động thêm Bot AI)</span>
+            </label>
+          </div>
+
+          <button id="btn-create-room-submit" class="game-btn primary full-width lobby-submit-btn">🚀 TẠO PHÒNG & BẮT ĐẦU</button>
+        </div>
+      </div>
+
+      <!-- Tab 2: Vào phòng có sẵn -->
+      <div id="tab-content-join" class="tab-content hidden">
+        <div class="room-form-grid">
+          <div class="form-group">
+            <label for="join-nickname">👤 Tên học sinh của bạn:</label>
+            <input type="text" id="join-nickname" placeholder="Nhập tên học sinh..." maxlength="15" autocomplete="off" />
+          </div>
+
+          <div class="form-group">
+            <label for="input-room-code">🔑 Mã phòng cần vào:</label>
+            <input type="text" id="input-room-code" placeholder="Ví dụ: ROOM-1234" maxlength="20" autocomplete="off" />
+          </div>
+        </div>
+
+        <div class="room-form-footer">
+          <button id="btn-join-room-submit" class="game-btn primary full-width lobby-submit-btn">🚪 THAM GIA PHÒNG</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

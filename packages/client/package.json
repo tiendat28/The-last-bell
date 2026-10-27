@@ -1,0 +1,22 @@
+{
+  "name": "@sinh-ton/client",
+  "version": "1.0.0",
+  "description": "WebGL 3D Client for Sinh Ton game",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@sinh-ton/shared": "*",
+    "socket.io-client": "^4.8.1",
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.170.0",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.7"
+  }
+}
+
