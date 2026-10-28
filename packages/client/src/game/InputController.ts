@@ -10,11 +10,11 @@ export class InputController {
   private isMouseDown: boolean = false;
   private previousMousePosition = { x: 0, y: 0 };
 
-  // Điều khiển cảm ứng (Mobile / Tablet)
+  // Điều khiển cảm ứng (Mobile / Tablet / iPad)
   private joystickVec = { x: 0, z: 0 };
   private joystickTouchId: number | null = null;
-  private cameraTouchId: number | null = null;
-  private prevCameraTouch = { x: 0, y: 0 };
+  private activeSceneTouches: Map<number, { x: number; y: number }> = new Map();
+  private lastPinchDistance: number | null = null;
   private elJoystickZone: HTMLElement | null = null;
   private elJoystickKnob: HTMLElement | null = null;
 
@@ -121,6 +121,7 @@ export class InputController {
       'touchstart',
       (e) => {
         e.preventDefault();
+        e.stopPropagation();
         const t = e.changedTouches[0];
         this.joystickTouchId = t.identifier;
         handleJoystickMove(t.clientX, t.clientY);
@@ -131,17 +132,46 @@ export class InputController {
     window.addEventListener(
       'touchmove',
       (e) => {
+        let handledSceneTouch = false;
+
         for (let i = 0; i < e.changedTouches.length; i++) {
           const t = e.changedTouches[i];
           if (t.identifier === this.joystickTouchId) {
+            e.preventDefault();
             handleJoystickMove(t.clientX, t.clientY);
-          } else if (t.identifier === this.cameraTouchId) {
-            const deltaX = t.clientX - this.prevCameraTouch.x;
-            const deltaY = t.clientY - this.prevCameraTouch.y;
-            const sensitivity = 0.006;
-            this.cameraYaw -= deltaX * sensitivity;
-            this.cameraPitch = Math.max(0.05, Math.min(Math.PI / 2.2, this.cameraPitch + deltaY * sensitivity));
-            this.prevCameraTouch = { x: t.clientX, y: t.clientY };
+          } else if (this.activeSceneTouches.has(t.identifier)) {
+            handledSceneTouch = true;
+            if (this.activeSceneTouches.size === 1) {
+              // 1 ngón tay trên khung cảnh: Xoay góc nhìn Camera 3D
+              const prev = this.activeSceneTouches.get(t.identifier)!;
+              const deltaX = t.clientX - prev.x;
+              const deltaY = t.clientY - prev.y;
+              const sensitivity = 0.006;
+              this.cameraYaw -= deltaX * sensitivity;
+              this.cameraPitch = Math.max(
+                0.05,
+                Math.min(Math.PI / 2.2, this.cameraPitch + deltaY * sensitivity)
+              );
+            }
+            this.activeSceneTouches.set(t.identifier, { x: t.clientX, y: t.clientY });
+          }
+        }
+
+        // 2 ngón tay trên khung cảnh (Pinch-to-Zoom): Thu phóng khung cảnh như lăn chuột trên máy tính
+        if (handledSceneTouch) {
+          e.preventDefault();
+          if (this.activeSceneTouches.size >= 2) {
+            const pts = Array.from(this.activeSceneTouches.values());
+            const currentDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+            if (this.lastPinchDistance !== null && currentDist > 0) {
+              const deltaDist = this.lastPinchDistance - currentDist;
+              const zoomSensitivity = 0.045;
+              this.cameraDistance = Math.max(
+                3,
+                Math.min(25, this.cameraDistance + deltaDist * zoomSensitivity)
+              );
+            }
+            this.lastPinchDistance = currentDist;
           }
         }
       },
@@ -153,27 +183,59 @@ export class InputController {
         const t = e.changedTouches[i];
         if (t.identifier === this.joystickTouchId) {
           resetJoystick();
-        } else if (t.identifier === this.cameraTouchId) {
-          this.cameraTouchId = null;
         }
+        if (this.activeSceneTouches.has(t.identifier)) {
+          this.activeSceneTouches.delete(t.identifier);
+        }
+      }
+
+      // Đồng bộ lại các điểm chạm còn thực sự giữ trên màn hình (tránh kẹt điểm chạm trên iOS)
+      const stillActiveIds = new Set<number>();
+      for (let i = 0; i < e.touches.length; i++) {
+        stillActiveIds.add(e.touches[i].identifier);
+      }
+      if (this.joystickTouchId !== null && !stillActiveIds.has(this.joystickTouchId)) {
+        resetJoystick();
+      }
+      for (const id of Array.from(this.activeSceneTouches.keys())) {
+        if (!stillActiveIds.has(id)) {
+          this.activeSceneTouches.delete(id);
+        }
+      }
+
+      if (this.activeSceneTouches.size < 2) {
+        this.lastPinchDistance = null;
       }
     };
 
     window.addEventListener('touchend', endTouch);
     window.addEventListener('touchcancel', endTouch);
 
-    // Chạm xoay camera trên vùng Canvas 3D
+    // Chạm 1 ngón xoay camera hoặc Chụm/Tách 2 ngón để thu phóng (Zoom In / Zoom Out) trên vùng Canvas 3D
     domElement.addEventListener(
       'touchstart',
       (e) => {
-        if (this.cameraTouchId === null && e.changedTouches.length > 0) {
-          const t = e.changedTouches[0];
-          this.cameraTouchId = t.identifier;
-          this.prevCameraTouch = { x: t.clientX, y: t.clientY };
+        e.preventDefault();
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          const t = e.changedTouches[i];
+          if (t.identifier === this.joystickTouchId) continue;
+          this.activeSceneTouches.set(t.identifier, { x: t.clientX, y: t.clientY });
+        }
+
+        if (this.activeSceneTouches.size >= 2) {
+          const pts = Array.from(this.activeSceneTouches.values());
+          this.lastPinchDistance = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+        } else {
+          this.lastPinchDistance = null;
         }
       },
-      { passive: true }
+      { passive: false }
     );
+
+    // Chặn gesture mặc định của iOS Safari / iPadOS để ưu tiên thu phóng khung cảnh 3D mượt mà
+    domElement.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
+    domElement.addEventListener('gesturechange', (e) => e.preventDefault(), { passive: false });
+    domElement.addEventListener('gestureend', (e) => e.preventDefault(), { passive: false });
   }
 
   /**

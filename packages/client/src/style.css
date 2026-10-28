@@ -8,29 +8,41 @@
 body, html {
   width: 100%;
   height: 100%;
+  height: 100dvh;
+  position: fixed;
+  inset: 0;
   overflow: hidden;
   background-color: #06070a;
   font-family: 'Chakra Petch', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   color: #f0f0f5;
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior: none;
 }
 
 #game-container {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   z-index: 1;
+  touch-action: none;
+}
+
+#game-container canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
 }
 
 #hud-overlay {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
   z-index: 10;
+  overflow: hidden;
 }
 
 /* Glassmorphism HUD Card */
@@ -550,9 +562,9 @@ body, html {
 /* Chat Box: Nằm ngay bên dưới Map Nhỏ (Bottom-Right), cỡ chữ nhỏ gọn */
 .chat-card {
   width: 100%;
-  flex: 1 1 auto;
-  min-height: 76px;
-  max-height: 185px;
+  flex: 1 1 0;
+  min-height: 68px;
+  max-height: 175px;
   padding: 6px 8px;
   display: flex;
   flex-direction: column;
@@ -563,7 +575,7 @@ body, html {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 0.64rem;
+  font-size: 0.62rem;
   font-weight: 700;
   color: #c77dff;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
@@ -571,6 +583,7 @@ body, html {
   margin-bottom: 4px;
   flex-shrink: 0;
   gap: 4px;
+  white-space: nowrap;
 }
 
 .audio-status-group {
@@ -635,6 +648,8 @@ body, html {
   font-size: 0.66rem;
   line-height: 1.28;
   padding-right: 3px;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
 }
 
 .chat-messages::-webkit-scrollbar {
@@ -1133,15 +1148,15 @@ body, html {
   transform: translateY(-1px);
 }
 
-/* Player List Card on HUD (Nằm trong .hud-left-column dưới .player-info-card) */
+/* Player List Card on HUD (Nằm trong .hud-left-column dưới .player-info-card, co nhỏ gọn gàng) */
 .player-list-card {
   width: 100%;
   flex: 0 1 auto;
-  max-height: clamp(130px, 38dvh, 270px);
+  max-height: clamp(105px, 26dvh, 185px);
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 7px 10px;
+  padding: 5px 8px;
   background: rgba(13, 17, 30, 0.92);
   border: 1px solid rgba(124, 58, 237, 0.35);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
@@ -1153,21 +1168,21 @@ body, html {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-bottom: 4px;
+  padding-bottom: 3px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  margin-bottom: 4px;
+  margin-bottom: 3px;
   flex-shrink: 0;
 }
 
 .player-list-title {
-  font-size: 0.72rem;
+  font-size: 0.66rem;
   font-weight: 700;
   color: #c084fc;
-  letter-spacing: 0.8px;
+  letter-spacing: 0.6px;
 }
 
 .player-list-counter {
-  font-size: 0.68rem;
+  font-size: 0.62rem;
   font-weight: 700;
   color: #10b981;
   background: rgba(16, 185, 129, 0.15);
@@ -1182,8 +1197,10 @@ body, html {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
   padding-right: 2px;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
 }
 
 .player-list-scroll::-webkit-scrollbar {
@@ -1405,27 +1422,59 @@ body, html {
 @media (max-width: 960px), (pointer: coarse) {
   .mobile-joystick-zone {
     display: block;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    left: max(10px, env(safe-area-inset-left));
   }
 
   .hud-left-column {
-    top: 8px;
-    left: 8px;
-    bottom: 118px;
-    width: clamp(148px, 22vw, 185px);
-    gap: 5px;
+    top: max(6px, env(safe-area-inset-top));
+    left: max(8px, env(safe-area-inset-left));
+    bottom: 114px;
+    width: clamp(122px, 17vw, 156px);
+    gap: 4px;
+    overflow: hidden;
   }
 
   .hud-right-column {
-    top: 8px;
-    right: 8px;
-    bottom: 8px;
-    width: clamp(158px, 23vw, 195px);
-    gap: 4px;
+    top: max(6px, env(safe-area-inset-top));
+    right: max(8px, env(safe-area-inset-right));
+    bottom: max(8px, env(safe-area-inset-bottom));
+    width: clamp(154px, 22vw, 190px);
+    gap: 3px;
   }
 
+  /* Co nhỏ bảng danh sách người chơi lại để không bao giờ chạm nút di chuyển (Joystick) */
   .player-list-card {
-    flex: 1 1 auto;
-    max-height: 100%;
+    flex: 0 1 auto !important;
+    max-height: clamp(76px, 23dvh, 112px) !important;
+    padding: 4px 6px;
+  }
+
+  .player-list-header {
+    padding-bottom: 2px;
+    margin-bottom: 2px;
+  }
+
+  .player-list-title {
+    font-size: 0.56rem;
+  }
+
+  .player-list-counter {
+    font-size: 0.52rem;
+    padding: 0 4px;
+  }
+
+  .player-item {
+    font-size: 0.53rem;
+    padding: 1px 3px;
+  }
+
+  .player-item-name {
+    max-width: 76px;
+  }
+
+  .player-item-status {
+    font-size: 0.48rem;
   }
 
   /* Loa thông báo thu gọn nhỏ nhắn trên điện thoại, nằm gọn ở giữa không đè 2 cột */
@@ -1470,42 +1519,44 @@ body, html {
 
   /* Trò chuyện bên dưới Map nhỏ: thu nhỏ cỡ chữ cho phù hợp điện thoại */
   .chat-card {
-    padding: 5px 6px;
-    min-height: 68px;
-    max-height: 140px;
+    flex: 1 1 0;
+    padding: 4px 6px;
+    min-height: 52px;
+    max-height: clamp(72px, 23dvh, 110px);
   }
 
   .chat-header {
-    font-size: 0.58rem;
+    font-size: 0.52rem;
     padding-bottom: 2px;
-    margin-bottom: 3px;
+    margin-bottom: 2px;
+    white-space: nowrap;
   }
 
   .speaker-status,
   .mic-status {
-    font-size: 0.48rem;
-    padding: 1px 4px;
+    font-size: 0.44rem;
+    padding: 1px 3px;
   }
 
   .chat-messages {
-    font-size: 0.58rem;
-    line-height: 1.22;
+    font-size: 0.55rem;
+    line-height: 1.2;
     gap: 2px;
   }
 
   .chat-input-row {
-    margin-top: 3px;
+    margin-top: 2px;
     gap: 3px;
   }
 
   .chat-input-row input {
-    font-size: 0.58rem;
-    padding: 3px 5px;
+    font-size: 0.55rem;
+    padding: 2px 5px;
   }
 
   .chat-send-btn {
-    font-size: 0.58rem;
-    padding: 3px 6px;
+    font-size: 0.55rem;
+    padding: 2px 6px;
   }
 
   /* Nút chức năng nhỏ gọn ngay bên dưới khung trò chuyện trên điện thoại */
@@ -1513,15 +1564,16 @@ body, html {
   .special-role-panel {
     position: static;
     width: 100%;
+    flex-shrink: 0;
     margin-top: 1px;
   }
 
   .action-btn,
   .special-btn {
     width: 100%;
-    padding: 5px 8px !important;
-    font-size: 0.6rem !important;
-    border-radius: 7px !important;
+    padding: 5px 6px !important;
+    font-size: 0.56rem !important;
+    border-radius: 6px !important;
     gap: 4px;
   }
 
@@ -1610,9 +1662,9 @@ body, html {
     font-size: 1.1rem;
   }
 
-  /* Ẩn dòng tọa độ phụ trên màn hình thấp để nhường chỗ cho Bản đồ nhỏ & Trò chuyện bên dưới */
-  .server-info-card .stat-row:nth-of-type(3),
-  .server-info-card .stat-row:nth-of-type(4) {
+  /* Ẩn dòng tọa độ phụ trên màn hình thấp, luôn giữ lại Mã Phòng & nút MỜI */
+  .server-info-card .stat-row-online,
+  .server-info-card .stat-row-coords {
     display: none;
   }
 
@@ -1676,149 +1728,173 @@ body, html {
 /* 3. Màn hình chiều cao thấp / Điện thoại xoay ngang (<= 620px) */
 @media (max-height: 620px) {
   .hud-left-column {
-    top: 6px;
-    left: 6px;
+    top: max(5px, env(safe-area-inset-top));
+    left: max(8px, env(safe-area-inset-left));
     bottom: 102px;
-    width: clamp(140px, 21vw, 172px);
-    gap: 4px;
+    width: clamp(118px, 16vw, 148px);
+    gap: 3px;
+    overflow: hidden;
   }
 
   .hud-right-column {
-    top: 6px;
-    right: 6px;
-    bottom: 6px;
-    width: clamp(150px, 22vw, 182px);
+    top: max(5px, env(safe-area-inset-top));
+    right: max(8px, env(safe-area-inset-right));
+    bottom: max(6px, env(safe-area-inset-bottom));
+    width: clamp(150px, 21.5vw, 182px);
     gap: 3px;
   }
 
   .player-info-card {
-    padding: 4px 7px;
+    padding: 3px 6px;
   }
 
   .player-header {
-    margin-bottom: 3px;
+    margin-bottom: 2px;
+    gap: 4px;
   }
 
   .player-role-badge {
-    font-size: 0.56rem;
-    padding: 1px 5px;
+    font-size: 0.5rem;
+    padding: 1px 4px;
   }
 
   .player-name {
-    font-size: 0.74rem;
+    font-size: 0.66rem;
   }
 
   .hp-bar-outer {
-    height: 7px;
+    height: 5px;
   }
 
   .hp-text {
-    font-size: 0.58rem;
+    font-size: 0.5rem;
   }
 
   .player-list-card {
-    padding: 4px 7px;
+    flex: 0 1 auto !important;
+    max-height: clamp(68px, 21dvh, 92px) !important;
+    padding: 3px 5px;
+  }
+
+  .player-list-header {
+    padding-bottom: 2px;
+    margin-bottom: 2px;
   }
 
   .player-list-title,
   .player-list-counter {
-    font-size: 0.6rem;
+    font-size: 0.52rem;
   }
 
   .player-item {
-    font-size: 0.58rem;
-    padding: 1px 4px;
+    font-size: 0.5rem;
+    padding: 1px 3px;
+  }
+
+  .player-item-name {
+    max-width: 72px;
+  }
+
+  .player-item-status {
+    font-size: 0.46rem;
   }
 
   .server-info-card {
-    padding: 4px 7px;
+    padding: 3px 6px;
     gap: 2px;
   }
 
   .status-indicator,
   .stat-row {
-    font-size: 0.6rem;
+    font-size: 0.56rem;
   }
 
-  /* Ẩn thêm dòng số lượng học sinh trùng lặp để dành chỗ cho Bản Đồ & Trò Chuyện */
-  .server-info-card .stat-row:nth-of-type(2),
-  .server-info-card .stat-row:nth-of-type(3),
-  .server-info-card .stat-row:nth-of-type(4) {
+  /* Luôn giữ lại dòng Mã Phòng & nút MỜI, chỉ ẩn các dòng phụ để nhường chỗ cho Bản Đồ, Chat & Nút Chức Năng */
+  .server-info-card .stat-row-online,
+  .server-info-card .stat-row-coords,
+  .server-info-card .stat-row-barrier {
     display: none;
   }
 
   .mini-btn {
     padding: 3px 6px !important;
-    font-size: 0.6rem !important;
+    font-size: 0.56rem !important;
   }
 
   .bot-btn {
-    font-size: 0.52rem;
+    font-size: 0.5rem;
     padding: 2px;
   }
 
   .minimap-card {
-    padding: 4px 6px;
+    padding: 3px 5px;
+  }
+
+  .minimap-header {
+    margin-bottom: 2px;
   }
 
   .minimap-title {
-    font-size: 0.56rem;
+    font-size: 0.52rem;
   }
 
   .minimap-area {
-    font-size: 0.58rem;
+    font-size: 0.54rem;
   }
 
   .minimap-wrapper {
-    width: clamp(56px, 15dvh, 76px);
-    height: clamp(56px, 15dvh, 76px);
+    width: clamp(46px, 12.5dvh, 64px);
+    height: clamp(46px, 12.5dvh, 64px);
   }
 
   .chat-card {
-    padding: 4px 6px;
-    min-height: 58px;
+    flex: 1 1 0;
+    padding: 3px 5px;
+    min-height: 46px;
+    max-height: clamp(64px, 21dvh, 88px);
   }
 
   .chat-header {
-    font-size: 0.56rem;
+    font-size: 0.5rem;
     margin-bottom: 2px;
     padding-bottom: 1px;
+    white-space: nowrap;
   }
 
   .speaker-status,
   .mic-status {
-    font-size: 0.46rem;
+    font-size: 0.42rem;
     padding: 1px 3px;
   }
 
   .chat-messages {
-    font-size: 0.55rem;
-    line-height: 1.18;
+    font-size: 0.52rem;
+    line-height: 1.16;
   }
 
   .chat-input-row input,
   .chat-send-btn {
-    font-size: 0.55rem;
-    padding: 2px 5px;
+    font-size: 0.52rem;
+    padding: 2px 4px;
   }
 
   .action-btn,
   .special-btn {
     padding: 4px 6px !important;
-    font-size: 0.56rem !important;
+    font-size: 0.54rem !important;
     border-radius: 6px !important;
   }
 
   .mobile-joystick-zone {
-    bottom: 8px;
-    left: 8px;
-    width: 84px;
-    height: 84px;
+    bottom: max(8px, env(safe-area-inset-bottom));
+    left: max(8px, env(safe-area-inset-left));
+    width: 80px;
+    height: 80px;
   }
 
   .mobile-joystick-knob {
-    width: 34px;
-    height: 34px;
+    width: 32px;
+    height: 32px;
   }
 
   .announcement-banner {

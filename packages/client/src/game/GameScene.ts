@@ -78,8 +78,15 @@ export class GameScene {
     this.inputController = new InputController(this.renderer.domElement);
     this.minimap = new Minimap();
 
-    // 5. Window resize & Phím E đóng/mở cửa
+    // 5. Window resize, orientationchange (iPhone/iPad PWA) & Phím E đóng/mở cửa
     window.addEventListener('resize', this.onWindowResize.bind(this));
+    window.addEventListener('orientationchange', () => {
+      setTimeout(() => this.onWindowResize(), 120);
+      setTimeout(() => this.onWindowResize(), 350);
+    });
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', this.onWindowResize.bind(this));
+    }
     window.addEventListener('keydown', (e: KeyboardEvent) => {
       if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') {
         return;

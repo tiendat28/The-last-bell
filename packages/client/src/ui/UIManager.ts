@@ -504,12 +504,39 @@ export class UIManager {
       }
     });
 
-    // Nút mở kỹ năng đêm cho vai trò bị bất động
+    // Nút mở kỹ năng chức năng dưới khung trò chuyện
     this.elBtnOpenRoleSkill.addEventListener('click', () => {
       this.soundManager.playActionBeep();
-      if (this.currentRole === 'SEER') this.openSeerModal();
-      else if (this.currentRole === 'BODYGUARD' || this.currentRole === 'DOCTOR') this.openBodyguardModal();
-      else if (this.currentRole === 'WITCH') this.openWitchModal();
+      if (this.currentPhase === GAME_PHASE.NIGHT && this.isCurrentlyAlive) {
+        if (this.currentRole === 'SEER') {
+          this.openSeerModal();
+          return;
+        }
+        if (this.currentRole === 'BODYGUARD' || this.currentRole === 'DOCTOR') {
+          this.openBodyguardModal();
+          return;
+        }
+        if (this.currentRole === 'WITCH') {
+          this.openWitchModal();
+          return;
+        }
+        if (this.currentRole === 'WEREWOLF') {
+          if (this.currentActionData) {
+            this.triggerCurrentAction();
+          } else {
+            this.addChatMessage({
+              id: `wolf_hint_${Date.now()}`,
+              senderId: 'system',
+              senderName: 'HỆ THỐNG',
+              text: '🐺 Hãy di chuyển áp sát học sinh trong bán kính <= 4.5m để cắn mục tiêu!',
+              timestamp: Date.now(),
+              isSystem: true,
+            });
+          }
+          return;
+        }
+      }
+      this.showRoleGuideModal(this.currentRole);
     });
 
     // Modal Tiên Tri
@@ -803,27 +830,69 @@ export class UIManager {
     }
 
     this.updateAudioAndChatState();
+    this.updateRoleSkillPanel();
+  }
 
-    // Hiển thị nút Dùng Kỹ Năng Đêm nếu là vai trò đặc biệt
-    if (this.currentPhase === GAME_PHASE.NIGHT && player.isAlive) {
-      if (player.role === 'SEER' || player.role === 'BODYGUARD' || player.role === 'WITCH' || player.role === 'DOCTOR') {
-        this.elSpecialRolePanel.classList.remove('hidden');
-        if (player.role === 'SEER') {
-          this.elRoleSkillIcon.textContent = '🔮';
-          this.elRoleSkillLabel.textContent = 'SOI DANH TÍNH (TIÊN TRI)';
-        } else if (player.role === 'BODYGUARD') {
-          this.elRoleSkillIcon.textContent = '🛡️';
-          this.elRoleSkillLabel.textContent = 'THIẾT LẬP KHIÊN (BẢO VỆ)';
-        } else if (player.role === 'DOCTOR') {
-          this.elRoleSkillIcon.textContent = '🩺';
-          this.elRoleSkillLabel.textContent = 'TIÊM THUỐC CỨU NGƯỜI (BÁC SĨ)';
-        } else if (player.role === 'WITCH') {
-          this.elRoleSkillIcon.textContent = '🧙';
-          this.elRoleSkillLabel.textContent = 'DƯỢC PHÒNG (PHÙ THỦY)';
-        }
-      } else {
-        this.elSpecialRolePanel.classList.add('hidden');
-      }
+  /**
+   * Hiển thị nút chức năng gọn gàng ngay bên dưới khung Trò Chuyện
+   */
+  private updateRoleSkillPanel(): void {
+    const inMatch =
+      this.currentPhase !== GAME_PHASE.LOBBY && this.currentPhase !== GAME_PHASE.GAME_OVER;
+
+    if (!this.isCurrentlyAlive || !inMatch) {
+      this.elSpecialRolePanel.classList.add('hidden');
+      this.elActionContainer.classList.add('hidden');
+      return;
+    }
+
+    const isNight = this.currentPhase === GAME_PHASE.NIGHT;
+
+    // Nếu là Ma Sói đang áp sát con mồi trong đêm: ưu tiên hiện nút đỏ CẮN MỤC TIÊU
+    if (isNight && this.currentRole === 'WEREWOLF' && this.currentActionData) {
+      this.elSpecialRolePanel.classList.add('hidden');
+      this.elActionIcon.textContent = '🐺';
+      this.elActionText.textContent = `CẮN MỤC TIÊU (${this.currentActionData.distance.toFixed(1)}m)`;
+      this.elActionContainer.classList.remove('hidden');
+      return;
+    }
+
+    this.elActionContainer.classList.add('hidden');
+
+    if (this.currentRole === 'SEER') {
+      this.elSpecialRolePanel.classList.remove('hidden');
+      this.elRoleSkillIcon.textContent = '🔮';
+      this.elRoleSkillLabel.textContent = isNight
+        ? 'SOI DANH TÍNH (TIÊN TRI)'
+        : 'KỸ NĂNG: TIÊN TRI (ĐÊM)';
+    } else if (this.currentRole === 'BODYGUARD') {
+      this.elSpecialRolePanel.classList.remove('hidden');
+      this.elRoleSkillIcon.textContent = '🛡️';
+      this.elRoleSkillLabel.textContent = isNight
+        ? 'THIẾT LẬP KHIÊN (BẢO VỆ)'
+        : 'KỸ NĂNG: BẢO VỆ (ĐÊM)';
+    } else if (this.currentRole === 'DOCTOR') {
+      this.elSpecialRolePanel.classList.remove('hidden');
+      this.elRoleSkillIcon.textContent = '🩺';
+      this.elRoleSkillLabel.textContent = isNight
+        ? 'CỨU NGƯỜI (BÁC SĨ)'
+        : 'KỸ NĂNG: BÁC SĨ (ĐÊM)';
+    } else if (this.currentRole === 'WITCH') {
+      this.elSpecialRolePanel.classList.remove('hidden');
+      this.elRoleSkillIcon.textContent = '🧙';
+      this.elRoleSkillLabel.textContent = isNight
+        ? 'DƯỢC PHÒNG (PHÙ THỦY)'
+        : 'KỸ NĂNG: PHÙ THỦY (ĐÊM)';
+    } else if (this.currentRole === 'WEREWOLF') {
+      this.elSpecialRolePanel.classList.remove('hidden');
+      this.elRoleSkillIcon.textContent = '🐺';
+      this.elRoleSkillLabel.textContent = isNight
+        ? 'SĂN MỒI (ÁP SÁT <= 4.5M)'
+        : 'KỸ NĂNG: MA SÓI (ĐÊM)';
+    } else if (this.currentRole === 'HUNTER') {
+      this.elSpecialRolePanel.classList.remove('hidden');
+      this.elRoleSkillIcon.textContent = '💥';
+      this.elRoleSkillLabel.textContent = 'KỸ NĂNG: THỢ SĂN';
     } else {
       this.elSpecialRolePanel.classList.add('hidden');
     }
@@ -885,11 +954,11 @@ export class UIManager {
         this.elSeerModal.classList.add('hidden');
         this.elBodyguardModal.classList.add('hidden');
         this.elWitchModal.classList.add('hidden');
-        this.elSpecialRolePanel.classList.add('hidden');
         this.elWolfPackPanel?.classList.add('hidden');
       }
 
       this.updateAudioAndChatState();
+      this.updateRoleSkillPanel();
 
       switch (phase) {
         case GAME_PHASE.LOBBY:
@@ -951,13 +1020,7 @@ export class UIManager {
 
   public updateActionButton(data: ActionButtonData | null): void {
     this.currentActionData = data;
-    if (!data || data.phase !== GAME_PHASE.NIGHT || data.role !== 'WEREWOLF') {
-      this.elActionContainer.classList.add('hidden');
-      return;
-    }
-    this.elActionIcon.textContent = '🐺';
-    this.elActionText.textContent = `CẮN MỤC TIÊU (${data.distance.toFixed(1)}m)`;
-    this.elActionContainer.classList.remove('hidden');
+    this.updateRoleSkillPanel();
   }
 
   // --- KỸ NĂNG TIÊN TRI ---

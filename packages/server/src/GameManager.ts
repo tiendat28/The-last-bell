@@ -389,6 +389,39 @@ export class GameManager {
       }
     }
 
+    // Hỗ trợ ưu tiên phân vai chức năng đặc biệt cho nhân vật "gibel" / "Gibel" (không phân biệt hoa thường trên iPhone)
+    for (const p of shuffled) {
+      if (p.isBot) continue;
+      const lowerName = p.name.trim().toLowerCase();
+      if (lowerName.startsWith('gibel')) {
+        let desiredRole: PlayerRole | null = null;
+        if (lowerName.includes('soi') || lowerName.includes('wolf')) desiredRole = 'WEREWOLF';
+        else if (lowerName.includes('tientri') || lowerName.includes('seer') || lowerName.includes('tri')) desiredRole = 'SEER';
+        else if (lowerName.includes('baove') || lowerName.includes('bodyguard') || lowerName.includes('ve')) desiredRole = 'BODYGUARD';
+        else if (lowerName.includes('phuthuy') || lowerName.includes('witch') || lowerName.includes('thuy')) desiredRole = 'WITCH';
+        else if (lowerName.includes('bacsi') || lowerName.includes('doctor')) desiredRole = 'DOCTOR';
+        else if (lowerName.includes('thosan') || lowerName.includes('hunter') || lowerName.includes('san')) desiredRole = 'HUNTER';
+
+        if (desiredRole && p.role !== desiredRole) {
+          const swapTarget = shuffled.find((other) => other.id !== p.id && other.role === desiredRole);
+          if (swapTarget) {
+            swapTarget.role = p.role;
+            p.role = desiredRole;
+          } else {
+            p.role = desiredRole;
+          }
+        } else if (!desiredRole && p.role === 'VILLAGER') {
+          // Mặc định nếu đặt tên "gibel" / "Gibel" mà trúng Dân Làng thì đổi sang vai trò có chức năng
+          const specialBot = shuffled.find((other) => other.isBot && other.role !== 'VILLAGER');
+          if (specialBot) {
+            const temp = specialBot.role;
+            specialBot.role = p.role;
+            p.role = temp;
+          }
+        }
+      }
+    }
+
     for (const p of shuffled) {
       if (p.role === 'WITCH') {
         this.witchPotions.set(p.id, { heal: true, poison: true });

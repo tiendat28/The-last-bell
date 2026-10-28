@@ -2,7 +2,10 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
   <title>SINH TỒN 3D - Tiếng Chuông Cuối Cùng</title>
   <link rel="stylesheet" href="/src/style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -58,20 +61,20 @@
           <span class="pulse-dot" id="hud-status-dot"></span>
           <span id="hud-server-status">Kết nối...</span>
         </div>
-        <div class="stat-row">
+        <div class="stat-row stat-row-room">
           <span>🔑 Mã Phòng:</span>
           <strong id="hud-room-id" class="copy-room-id">ROOM-0000</strong>
           <button id="btn-copy-invite" class="mini-copy-btn" title="Sao chép link mời bạn bè">📋 MỜI</button>
         </div>
-        <div class="stat-row">
+        <div class="stat-row stat-row-online">
           <span>👥 Học sinh:</span>
           <strong id="hud-online-count">1</strong>
         </div>
-        <div class="stat-row">
+        <div class="stat-row stat-row-coords">
           <span>📍 Tọa độ:</span>
           <span id="hud-coords">X: 0 | Z: 0</span>
         </div>
-        <div class="stat-row">
+        <div class="stat-row stat-row-barrier">
           <span>🔮 Tâm kết giới:</span>
           <span id="hud-distance">0.0m / 300m</span>
         </div>
