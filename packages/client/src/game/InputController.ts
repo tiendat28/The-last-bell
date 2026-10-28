@@ -104,7 +104,7 @@ export class InputController {
       }
 
       this.elJoystickKnob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
-      this.joystickVec.x = -(dx / maxRadius);
+      this.joystickVec.x = dx / maxRadius;
       this.joystickVec.z = -(dy / maxRadius);
     };
 
