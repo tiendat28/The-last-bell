@@ -265,9 +265,9 @@ export class InputController {
     if (moved) {
       move.normalize();
 
-      // Hướng di chuyển tương đối theo góc quay camera
+      // Hướng di chuyển tương đối theo góc quay camera (rightVec = forwardVec x upVec)
       const forwardVec = new THREE.Vector3(Math.sin(this.cameraYaw), 0, Math.cos(this.cameraYaw));
-      const rightVec = new THREE.Vector3(Math.cos(this.cameraYaw), 0, -Math.sin(this.cameraYaw));
+      const rightVec = new THREE.Vector3(-Math.cos(this.cameraYaw), 0, Math.sin(this.cameraYaw));
 
       const worldMove = new THREE.Vector3();
       worldMove.addScaledVector(forwardVec, move.z);
