@@ -1385,14 +1385,14 @@ body, html {
   margin-bottom: 0;
 }
 
-/* Joystick ảo cho Thiết bị cảm ứng (Mobile / Tablet) */
+/* Joystick ảo cho Thiết bị cảm ứng (Mobile / Tablet) - Khoảng cách chuẩn như game mobile */
 .mobile-joystick-zone {
   display: none;
   position: fixed;
-  bottom: 14px;
-  left: 14px;
-  width: 96px;
-  height: 96px;
+  bottom: calc(32px + env(safe-area-inset-bottom, 0px));
+  left: calc(34px + env(safe-area-inset-left, 0px));
+  width: 90px;
+  height: 90px;
   border-radius: 50%;
   background: rgba(15, 23, 42, 0.55);
   border: 2px solid rgba(168, 85, 247, 0.55);
@@ -1422,14 +1422,16 @@ body, html {
 @media (max-width: 960px), (pointer: coarse) {
   .mobile-joystick-zone {
     display: block;
-    bottom: max(10px, env(safe-area-inset-bottom));
-    left: max(10px, env(safe-area-inset-left));
+    bottom: calc(30px + env(safe-area-inset-bottom, 0px));
+    left: calc(32px + env(safe-area-inset-left, 0px));
+    width: 88px;
+    height: 88px;
   }
 
   .hud-left-column {
     top: max(6px, env(safe-area-inset-top));
     left: max(8px, env(safe-area-inset-left));
-    bottom: 114px;
+    bottom: calc(130px + env(safe-area-inset-bottom, 0px));
     width: clamp(122px, 17vw, 156px);
     gap: 4px;
     overflow: hidden;
@@ -1730,7 +1732,7 @@ body, html {
   .hud-left-column {
     top: max(5px, env(safe-area-inset-top));
     left: max(8px, env(safe-area-inset-left));
-    bottom: 102px;
+    bottom: calc(122px + env(safe-area-inset-bottom, 0px));
     width: clamp(118px, 16vw, 148px);
     gap: 3px;
     overflow: hidden;
@@ -1886,10 +1888,10 @@ body, html {
   }
 
   .mobile-joystick-zone {
-    bottom: max(8px, env(safe-area-inset-bottom));
-    left: max(8px, env(safe-area-inset-left));
-    width: 80px;
-    height: 80px;
+    bottom: calc(26px + env(safe-area-inset-bottom, 0px));
+    left: calc(30px + env(safe-area-inset-left, 0px));
+    width: 82px;
+    height: 82px;
   }
 
   .mobile-joystick-knob {
@@ -2032,7 +2034,7 @@ body, html {
   .hud-left-column {
     top: 6px;
     left: 6px;
-    bottom: 110px;
+    bottom: calc(135px + env(safe-area-inset-bottom, 0px));
     width: calc(48vw - 8px);
     gap: 4px;
   }
