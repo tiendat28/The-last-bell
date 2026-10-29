@@ -1,5 +1,5 @@
 import { GameManager } from './GameManager';
-import { RoomModeType, ROOM_MODES, RoomCreatePayload } from '@sinh-ton/shared';
+import { RoomModeType, ROOM_MODES, RoomCreatePayload, GAME_EDITIONS } from '@sinh-ton/shared';
 
 export class RoomManager {
   private rooms: Map<string, GameManager> = new Map();
@@ -20,11 +20,12 @@ export class RoomManager {
     const roomId = customRoomId || `ROOM-${Math.floor(1000 + Math.random() * 9000)}`;
     const gm = new GameManager(roomId, payload.roomName || `Phòng #${roomId}`, hostSocketId);
     gm.mode = payload.mode || ROOM_MODES.STANDARD_9_13;
+    gm.edition = payload.edition || GAME_EDITIONS.CLASSIC;
     gm.targetCount = payload.targetCount || 10;
     gm.isBotMode = payload.enableBots || false;
 
     this.rooms.set(roomId, gm);
-    console.log(`[RoomManager] Tạo phòng mới: ${roomId} (${gm.roomName}), Chế độ: ${gm.mode}, Mục tiêu: ${gm.targetCount} người`);
+    console.log(`[RoomManager] Tạo phòng mới: ${roomId} (${gm.roomName}), Bản: ${gm.edition}, Chế độ: ${gm.mode}, Mục tiêu: ${gm.targetCount} người`);
     return gm;
   }
 

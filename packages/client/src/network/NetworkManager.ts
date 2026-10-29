@@ -21,6 +21,13 @@ import {
   VoiceDataPayload
 } from '@sinh-ton/shared';
 
+export interface VoiceTokenPayload {
+  provider: 'livekit' | 'fallback_webaudio';
+  url?: string;
+  token?: string;
+  roomId?: string;
+}
+
 export interface NetworkCallbacks {
   onSelfJoined: (self: PlayerState, initialState: GameStatePayload) => void;
   onPlayerJoined: (player: PlayerState) => void;
@@ -38,6 +45,7 @@ export interface NetworkCallbacks {
   onHunterPrompt?: (prompt: HunterPromptPayload) => void;
   onWolfVoteUpdate?: (data: WolfVoteUpdatePayload) => void;
   onVoiceData?: (data: VoiceDataPayload) => void;
+  onVoiceTokenReady?: (data: VoiceTokenPayload) => void;
 }
 
 export class NetworkManager {
@@ -152,52 +160,50 @@ export class NetworkManager {
     this.socket.on(SOCKET_EVENTS.VOICE_DATA, (data: VoiceDataPayload) => {
       if (this.callbacks.onVoiceData) this.callbacks.onVoiceData(data);
     });
+
+    this.socket.on(SOCKET_EVENTS.VOICE_TOKEN_READY, (data: VoiceTokenPayload) => {
+      if (this.callbacks.onVoiceTokenReady) this.callbacks.onVoiceTokenReady(data);
+    });
+  }
+
+  public requestVoiceToken(): void {
+    if (!this.socket) return;
+    this.socket.emit(SOCKET_EVENTS.REQUEST_VOICE_TOKEN);
   }
 
   public getCurrentRoomId(): string {
     return this.currentRoomId;
   }
 
-  public createRoom(payload: RoomCreatePayload, callback?: (res: any) => void): void {
-    const doEmit = () => {
-      this.socket?.emit(SOCKET_EVENTS.CREATE_ROOM, payload, (res: any) => {
-        if (res && res.roomId) this.currentRoomId = res.roomId;
-        if (callback) callback(res);
-      });
-    };
-
+  private ensureConnectedAndEmit(name: string, roomId: string, emitFn: () => void): void {
     if (!this.socket) {
-      this.connect(payload.name, 'SANH-CHINH', true);
+      this.connect(name, roomId, true);
     }
-    const sock = this.socket;
-    if (sock) {
+    if (this.socket) {
       if (!this.isConnected) {
-        sock.once(SOCKET_EVENTS.CONNECT, doEmit);
+        this.socket.once(SOCKET_EVENTS.CONNECT, emitFn);
       } else {
-        doEmit();
+        emitFn();
       }
     }
   }
 
+  public createRoom(payload: RoomCreatePayload, callback?: (res: any) => void): void {
+    this.ensureConnectedAndEmit(payload.name, 'SANH-CHINH', () => {
+      this.socket?.emit(SOCKET_EVENTS.CREATE_ROOM, payload, (res: any) => {
+        if (res && res.roomId) this.currentRoomId = res.roomId;
+        if (callback) callback(res);
+      });
+    });
+  }
+
   public joinRoom(roomId: string, name: string, callback?: (res: any) => void): void {
-    const doEmit = () => {
+    this.ensureConnectedAndEmit(name, roomId, () => {
       this.socket?.emit(SOCKET_EVENTS.JOIN_ROOM, { roomId, name }, (res: any) => {
         if (res && res.roomId) this.currentRoomId = res.roomId;
         if (callback) callback(res);
       });
-    };
-
-    if (!this.socket) {
-      this.connect(name, roomId, true);
-    }
-    const sock = this.socket;
-    if (sock) {
-      if (!this.isConnected) {
-        sock.once(SOCKET_EVENTS.CONNECT, doEmit);
-      } else {
-        doEmit();
-      }
-    }
+    });
   }
 
   public fillBots(targetCount: number): void {
@@ -228,7 +234,7 @@ export class NetworkManager {
 
   public sendNightAction(
     targetPlayerId: string,
-    actionType: 'kill' | 'protect',
+    actionType: 'kill' | 'protect' | 'classic_wolf_vote',
     callback?: (res: { success: boolean; message: string }) => void
   ): void {
     if (!this.socket || !this.isConnected) return;

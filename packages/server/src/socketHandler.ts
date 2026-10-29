@@ -1,6 +1,7 @@
 import { Server, Socket } from 'socket.io';
 import { RoomManager } from './RoomManager';
 import { GameManager } from './GameManager';
+import { createLiveKitToken } from './livekit';
 import {
   SOCKET_EVENTS,
   PlayerMovePayload,
@@ -9,8 +10,20 @@ import {
   VotePayload,
   WitchActionPayload,
   HunterShootPayload,
-  RoomCreatePayload
+  RoomCreatePayload,
+  PlayerRole
 } from '@sinh-ton/shared';
+
+// Bảng tên hiển thị vai trò kèm icon trực quan
+const ROLE_DISPLAY_NAMES: Record<string, string> = {
+  WEREWOLF: 'MA SÓI 🐺',
+  SEER: 'TIÊN TRI 🔮',
+  BODYGUARD: 'BẢO VỆ 🛡️',
+  WITCH: 'PHÙ THỦY 🧙',
+  DOCTOR: 'BÁC SĨ 🩺',
+  HUNTER: 'THỢ SĂN 💥',
+  VILLAGER: 'DÂN LÀNG 👤',
+};
 
 export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
   // Gắn helper liên kết GameManager với Socket.io Room
@@ -81,55 +94,16 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
       }
     };
 
-    // 1. Tạo phòng mới
-    socket.on(SOCKET_EVENTS.CREATE_ROOM, (payload: RoomCreatePayload, callback?: (res: any) => void) => {
-      // Rời triệt để phòng cũ nếu có
+    // Helper gia nhập phòng chơi & đồng bộ trạng thái, tự động cấp token LiveKit WebRTC
+    const enterRoom = async (
+      gm: GameManager,
+      playerName?: string,
+      callback?: (res: any) => void
+    ) => {
       leaveAllGameRooms();
-
-      const gm = roomManager.createRoom(payload, undefined, socket.id);
       bindGameManagerEvents(gm);
 
-      const player = gm.addPlayer(socket.id, payload.name);
-      roomManager.registerPlayerToRoom(socket.id, gm.roomId);
-      socket.join(gm.roomId);
-
-      if (payload.enableBots) {
-        gm.fillBotsToTarget(gm.targetCount);
-      }
-
-      if (callback) {
-        callback({
-          success: true,
-          roomId: gm.roomId,
-          self: player,
-          state: gm.getGameState(),
-        });
-      }
-
-      socket.emit(SOCKET_EVENTS.PLAYER_JOINED, {
-        self: player,
-        state: gm.getGameState(),
-      });
-      io.to(gm.roomId).emit(SOCKET_EVENTS.SYNC_STATE, gm.getGameState());
-    });
-
-    // 2. Tham gia phòng
-    socket.on(SOCKET_EVENTS.JOIN_ROOM, (payload: { roomId: string; name: string }, callback?: (res: any) => void) => {
-      leaveAllGameRooms();
-
-      let gm = roomManager.getRoom(payload.roomId);
-      if (!gm) {
-        // Nếu không tìm thấy, vào sảnh chính
-        gm = roomManager.getRoom('SANH-CHINH');
-      }
-
-      if (!gm) {
-        if (callback) callback({ success: false, message: 'Không tìm thấy phòng!' });
-        return;
-      }
-
-      bindGameManagerEvents(gm);
-      const player = gm.addPlayer(socket.id, payload.name);
+      const player = gm.addPlayer(socket.id, playerName);
       roomManager.registerPlayerToRoom(socket.id, gm.roomId);
       socket.join(gm.roomId);
 
@@ -148,6 +122,39 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
       });
       socket.to(gm.roomId).emit(SOCKET_EVENTS.PLAYER_JOINED, { player });
       io.to(gm.roomId).emit(SOCKET_EVENTS.SYNC_STATE, gm.getGameState());
+
+      // Cung cấp token LiveKit nếu đã cấu hình
+      createLiveKitToken(gm.roomId, socket.id, player.name).then((lkRes) => {
+        if (lkRes) {
+          socket.emit(SOCKET_EVENTS.VOICE_TOKEN_READY, {
+            provider: 'livekit',
+            url: lkRes.url,
+            token: lkRes.token,
+            roomId: gm.roomId,
+          });
+        }
+      });
+
+      return player;
+    };
+
+    // 1. Tạo phòng mới
+    socket.on(SOCKET_EVENTS.CREATE_ROOM, async (payload: RoomCreatePayload, callback?: (res: any) => void) => {
+      const gm = roomManager.createRoom(payload, undefined, socket.id);
+      if (payload.enableBots) {
+        gm.fillBotsToTarget(gm.targetCount);
+      }
+      await enterRoom(gm, payload.name, callback);
+    });
+
+    // 2. Tham gia phòng
+    socket.on(SOCKET_EVENTS.JOIN_ROOM, async (payload: { roomId: string; name: string }, callback?: (res: any) => void) => {
+      const gm = roomManager.getRoom(payload.roomId) || roomManager.getRoom('SANH-CHINH');
+      if (!gm) {
+        if (callback) callback({ success: false, message: 'Không tìm thấy phòng!' });
+        return;
+      }
+      await enterRoom(gm, payload.name, callback);
     });
 
     // 3. Kết nối mặc định (chỉ chạy khi không phải kết nối qua CreateRoom / JoinRoom)
@@ -155,18 +162,10 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
     if (!skipAutoJoin) {
       const initialName = socket.handshake.query.name as string | undefined;
       const initialRoomId = (socket.handshake.query.roomId as string) || 'SANH-CHINH';
-      let gm = roomManager.getRoom(initialRoomId) || roomManager.getRoom('SANH-CHINH')!;
-      bindGameManagerEvents(gm);
-
-      const newPlayer = gm.addPlayer(socket.id, initialName);
-      roomManager.registerPlayerToRoom(socket.id, gm.roomId);
-      socket.join(gm.roomId);
-
-      socket.emit(SOCKET_EVENTS.PLAYER_JOINED, {
-        self: newPlayer,
-        state: gm.getGameState(),
-      });
-      socket.to(gm.roomId).emit(SOCKET_EVENTS.PLAYER_JOINED, { player: newPlayer });
+      const gm = roomManager.getRoom(initialRoomId) || roomManager.getRoom('SANH-CHINH');
+      if (gm) {
+        enterRoom(gm, initialName);
+      }
     }
 
     // 4. Bắt đầu trận đấu
@@ -215,8 +214,8 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
       if (!room) return;
       let result = { success: false, message: 'Hành động không xác định!' };
 
-      if (payload.actionType === 'kill' && payload.targetPlayerId) {
-        result = room.handleWerewolfKill(socket.id, payload.targetPlayerId);
+      if (payload.actionType === 'kill' || payload.actionType === 'classic_wolf_vote') {
+        result = room.handleWerewolfKill(socket.id, payload.targetPlayerId || null);
         // Gửi cập nhật trạng thái đồng thuận bầy Sói cho tất cả Ma Sói trong phòng
         const wolfStatus = room.getWerewolfVoteStatus();
         for (const p of room.getGameState().players) {
@@ -299,16 +298,7 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
       if (!player) return;
 
       room.forceSetPlayerRole(player.id, data.role);
-      const roleDisplayNames: Record<string, string> = {
-        WEREWOLF: 'MA SÓI 🐺',
-        SEER: 'TIÊN TRI 🔮',
-        BODYGUARD: 'BẢO VỆ 🛡️',
-        WITCH: 'PHÙ THỦY 🧙',
-        DOCTOR: 'BÁC SĨ 🩺',
-        HUNTER: 'THỢ SĂN 💥',
-        VILLAGER: 'DÂN LÀNG 👤',
-      };
-      const displayName = roleDisplayNames[data.role] || data.role;
+      const displayName = ROLE_DISPLAY_NAMES[data.role] || data.role;
 
       io.to(room.roomId).emit(SOCKET_EVENTS.CHAT_MESSAGE, {
         id: `cheat_${Date.now()}`,
@@ -346,16 +336,7 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
 
         if (targetRole) {
           room.forceSetPlayerRole(player.id, targetRole);
-          const roleDisplayNames: Record<string, string> = {
-            WEREWOLF: 'MA SÓI 🐺',
-            SEER: 'TIÊN TRI 🔮',
-            BODYGUARD: 'BẢO VỆ 🛡️',
-            WITCH: 'PHÙ THỦY 🧙',
-            DOCTOR: 'BÁC SĨ 🩺',
-            HUNTER: 'THỢ SĂN 💥',
-            VILLAGER: 'DÂN LÀNG 👤',
-          };
-          const displayName = roleDisplayNames[targetRole] || targetRole;
+          const displayName = ROLE_DISPLAY_NAMES[targetRole] || targetRole;
 
           io.to(room.roomId).emit(SOCKET_EVENTS.CHAT_MESSAGE, {
             id: `cheat_${Date.now()}`,
@@ -475,6 +456,27 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
           samples: data.samples,
           sampleRate: data.sampleRate || 16000,
           isWolfChannel: false,
+        });
+      }
+    });
+
+    // Yêu cầu cấp LiveKit Voice Token chủ động từ client
+    socket.on(SOCKET_EVENTS.REQUEST_VOICE_TOKEN, async () => {
+      const room = getCurrentRoom();
+      if (!room) return;
+      const player = room.getPlayer(socket.id);
+      const name = player ? player.name : socket.id;
+      const lkRes = await createLiveKitToken(room.roomId, socket.id, name);
+      if (lkRes) {
+        socket.emit(SOCKET_EVENTS.VOICE_TOKEN_READY, {
+          provider: 'livekit',
+          url: lkRes.url,
+          token: lkRes.token,
+          roomId: room.roomId,
+        });
+      } else {
+        socket.emit(SOCKET_EVENTS.VOICE_TOKEN_READY, {
+          provider: 'fallback_webaudio',
         });
       }
     });

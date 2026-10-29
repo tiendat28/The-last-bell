@@ -17,6 +17,13 @@ export const ROOM_MODES = {
 
 export type RoomModeType = typeof ROOM_MODES[keyof typeof ROOM_MODES];
 
+export const GAME_EDITIONS = {
+  CLASSIC: 'CLASSIC',   // Bản Gốc: Ma Sói truyền thống, Sói thảo luận 45s & bỏ phiếu (>2/3), Phù thủy dùng sau khi Sói chốt
+  SPINOFF: 'SPINOFF',   // Bản Ngoại Truyện: Sinh Tồn 3D di chuyển tự do, Sói hóa thú áp sát cắn trực tiếp
+} as const;
+
+export type GameEditionType = typeof GAME_EDITIONS[keyof typeof GAME_EDITIONS];
+
 export const GAME_CONFIG = {
   SERVER_PORT: 3000,
   CLIENT_PORT: 5173,
@@ -38,6 +45,13 @@ export const GAME_CONFIG = {
       DAY_VOTING: 60, // 1 phút
       DAY_HIDING: 180, // 3 phút
     },
+  },
+
+  // Thời gian riêng cho Bản Gốc (Classic Mode)
+  CLASSIC_MODE: {
+    WOLF_DISCUSSION_TIME: 45, // 45 giây để bầy Sói thảo luận & bỏ phiếu cắn
+    WITCH_ACTION_TIME: 20,    // 20 giây để Phù Thủy quyết định dùng bình Cứu / Độc sau khi Sói chốt
+    NIGHT_TOTAL_TIME: 65,     // Tổng thời gian Đêm Bản Gốc = 45s + 20s = 65s
   },
 
   // Game Loop
@@ -348,6 +362,8 @@ export const SOCKET_EVENTS = {
   ANNOUNCEMENT: 'announcement',
   CHAT_MESSAGE: 'chat_message',
   VOICE_DATA: 'voice_data',
+  REQUEST_VOICE_TOKEN: 'request_voice_token',
+  VOICE_TOKEN_READY: 'voice_token_ready',
   NIGHT_ACTION: 'night_action',
   WOLF_VOTE_UPDATE: 'wolf_vote_update',
   CAST_VOTE: 'cast_vote',

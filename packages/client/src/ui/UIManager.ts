@@ -12,6 +12,8 @@ import {
   RoomCreatePayload,
   RoomModeType,
   ROOM_MODES,
+  GAME_EDITIONS,
+  GameEditionType,
   WolfVoteUpdatePayload,
   ROLE_NAMES_VI
 } from '@sinh-ton/shared';
@@ -26,6 +28,21 @@ export interface ActionButtonData {
 
 export class UIManager {
   public soundManager: SoundManager;
+
+  // Phiên bản trò chơi: CLASSIC (Bản Gốc) | SPINOFF (Bản Ngoại Truyện)
+  private currentEdition: GameEditionType = GAME_EDITIONS.CLASSIC;
+  private elSelectRoomEdition: HTMLSelectElement | null = null;
+
+  // Wolf Night Modal (Bản Gốc)
+  private elWolfModal: HTMLElement | null = null;
+  private elWolfModalCountdown: HTMLElement | null = null;
+  private elWolfConsensusStatus: HTMLElement | null = null;
+  private elWolfConsensusFill: HTMLElement | null = null;
+  private elWolfConsensusDetails: HTMLElement | null = null;
+  private elWolfVotePlayerList: HTMLElement | null = null;
+  private elBtnWolfSkipVote: HTMLButtonElement | null = null;
+  private elBtnCloseWolfModal: HTMLButtonElement | null = null;
+  private myWolfVoteTargetId: string | null = null;
 
   // Elements cơ bản
   private elPlayerName: HTMLElement;
@@ -43,6 +60,9 @@ export class UIManager {
   private elGameOverTitle: HTMLElement;
   private elGameOverReason: HTMLElement;
   private elBtnRespawn: HTMLButtonElement;
+  private elBtnBackLobby: HTMLButtonElement;
+  private elBtnGhostLeave: HTMLButtonElement | null;
+  private elBtnServerLeave: HTMLButtonElement | null;
   private elBtnStartGame: HTMLButtonElement;
 
   // Room Lobby & Tabs
@@ -182,7 +202,7 @@ export class UIManager {
   private onClearBotsCallback?: () => void;
   private onRespawnCallback?: () => void;
   private onStartGameCallback?: () => void;
-  private onActionTriggerCallback?: (targetId: string, actionType: 'kill' | 'protect') => void;
+  private onActionTriggerCallback?: (targetId: string, actionType: 'kill' | 'protect' | 'classic_wolf_vote') => void;
   private onSeerActionCallback?: (targetId: string) => void;
   private onWitchActionCallback?: (useHeal: boolean, poisonTargetId: string | null) => void;
   private onHunterShootCallback?: (targetId: string | null) => void;
@@ -212,6 +232,9 @@ export class UIManager {
     this.elGameOverTitle = document.getElementById('game-over-title')!;
     this.elGameOverReason = document.getElementById('game-over-reason')!;
     this.elBtnRespawn = document.getElementById('btn-respawn') as HTMLButtonElement;
+    this.elBtnBackLobby = document.getElementById('btn-back-lobby') as HTMLButtonElement;
+    this.elBtnGhostLeave = document.getElementById('btn-ghost-leave') as HTMLButtonElement;
+    this.elBtnServerLeave = document.getElementById('btn-server-leave') as HTMLButtonElement;
     this.elBtnStartGame = document.getElementById('btn-start-game') as HTMLButtonElement;
 
     // Room Lobby & Tabs
@@ -223,6 +246,7 @@ export class UIManager {
 
     this.elCreateNickname = document.getElementById('create-nickname') as HTMLInputElement;
     this.elCreateRoomName = document.getElementById('create-room-name') as HTMLInputElement;
+    this.elSelectRoomEdition = document.getElementById('select-room-edition') as HTMLSelectElement | null;
     this.elSelectRoomMode = document.getElementById('select-room-mode') as HTMLSelectElement;
     this.elSelectTargetCount = document.getElementById('select-target-count') as HTMLSelectElement;
     this.elCheckEnableBots = document.getElementById('check-enable-bots') as HTMLInputElement;
@@ -286,6 +310,16 @@ export class UIManager {
     this.elHunterModal = document.getElementById('hunter-modal')!;
     this.elHunterTargetList = document.getElementById('hunter-target-list')!;
     this.elBtnHunterSkip = document.getElementById('btn-hunter-skip') as HTMLButtonElement;
+
+    // Wolf Night Modal (Bản Gốc)
+    this.elWolfModal = document.getElementById('wolf-modal');
+    this.elWolfModalCountdown = document.getElementById('wolf-modal-countdown');
+    this.elWolfConsensusStatus = document.getElementById('wolf-consensus-status');
+    this.elWolfConsensusFill = document.getElementById('wolf-consensus-fill');
+    this.elWolfConsensusDetails = document.getElementById('wolf-consensus-details');
+    this.elWolfVotePlayerList = document.getElementById('wolf-vote-player-list');
+    this.elBtnWolfSkipVote = document.getElementById('btn-wolf-skip-vote') as HTMLButtonElement | null;
+    this.elBtnCloseWolfModal = document.getElementById('btn-close-wolf-modal') as HTMLButtonElement | null;
 
     this.elChatMessages = document.getElementById('chat-messages')!;
     this.elChatInput = document.getElementById('chat-input') as HTMLInputElement;
@@ -364,6 +398,7 @@ export class UIManager {
       const name = this.elCreateNickname.value.trim() || defaultNick;
       const roomName = this.elCreateRoomName.value.trim() || 'Lớp Học Nửa Đêm';
       const mode = (this.elSelectRoomMode.value as RoomModeType) || ROOM_MODES.STANDARD_9_13;
+      const edition = (this.elSelectRoomEdition?.value as GameEditionType) || GAME_EDITIONS.CLASSIC;
       const targetCount = parseInt(this.elSelectTargetCount.value, 10) || 10;
       const enableBots = this.elCheckEnableBots.checked;
 
@@ -375,6 +410,7 @@ export class UIManager {
           name,
           roomName,
           mode,
+          edition,
           targetCount,
           enableBots,
         });
@@ -382,6 +418,27 @@ export class UIManager {
         this.onJoinGameCallback(name);
       }
     });
+
+    // Modal Ma Sói Ban Đêm (Bản Gốc)
+    if (this.elBtnWolfSkipVote) {
+      this.elBtnWolfSkipVote.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.soundManager.playActionBeep();
+        this.myWolfVoteTargetId = null;
+        if (this.onActionTriggerCallback) {
+          this.onActionTriggerCallback('', 'classic_wolf_vote');
+        }
+        this.openWolfModal();
+      });
+    }
+
+    if (this.elBtnCloseWolfModal) {
+      this.elBtnCloseWolfModal.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.soundManager.playActionBeep();
+        this.elWolfModal?.classList.add('hidden');
+      });
+    }
 
     // Vào Phòng Có Sẵn
     this.elBtnJoinRoomSubmit.addEventListener('click', () => {
@@ -440,38 +497,17 @@ export class UIManager {
     this.elBtnFillBots.addEventListener('click', () => {
       const target = parseInt(this.elSelectTargetCount.value, 10) || 10;
       if (this.onFillBotsCallback) this.onFillBotsCallback(target);
-      this.addChatMessage({
-        id: `bot_fill_${Date.now()}`,
-        senderId: 'system',
-        senderName: 'HỆ THỐNG',
-        text: `Đã yêu cầu máy chủ lấp đầy Bot AI (mục tiêu ${target} người).`,
-        timestamp: Date.now(),
-        isSystem: true,
-      });
+      this.addSystemChat(`Đã yêu cầu máy chủ lấp đầy Bot AI (mục tiêu ${target} người).`);
     });
 
     this.elBtnAddBot.addEventListener('click', () => {
       if (this.onAddBotCallback) this.onAddBotCallback();
-      this.addChatMessage({
-        id: `bot_add_${Date.now()}`,
-        senderId: 'system',
-        senderName: 'HỆ THỐNG',
-        text: 'Đã thêm 1 Bot AI vào phòng.',
-        timestamp: Date.now(),
-        isSystem: true,
-      });
+      this.addSystemChat('Đã thêm 1 Bot AI vào phòng.');
     });
 
     this.elBtnClearBots.addEventListener('click', () => {
       if (this.onClearBotsCallback) this.onClearBotsCallback();
-      this.addChatMessage({
-        id: `bot_clear_${Date.now()}`,
-        senderId: 'system',
-        senderName: 'HỆ THỐNG',
-        text: 'Đã xóa toàn bộ Bot AI khỏi phòng.',
-        timestamp: Date.now(),
-        isSystem: true,
-      });
+      this.addSystemChat('Đã xóa toàn bộ Bot AI khỏi phòng.');
     });
 
     this.elBtnStartGame.addEventListener('click', () => {
@@ -482,16 +518,19 @@ export class UIManager {
     this.elBtnRespawn.addEventListener('click', () => {
       this.isSpectating = true;
       this.elDeathScreen.classList.add('hidden');
-      this.addChatMessage({
-        id: `ghost_${Date.now()}`,
-        senderId: 'system',
-        senderName: 'HỆ THỐNG',
-        text: 'Bạn đã chuyển sang chế độ Hồn Ma! Giờ bạn có thể bay lượn tự do để theo dõi trận đấu.',
-        timestamp: Date.now(),
-        isSystem: true,
-      });
+      this.addSystemChat('Bạn đã chuyển sang chế độ Hồn Ma! Giờ bạn có thể bay lượn tự do để theo dõi trận đấu.');
+      if (this.elBtnGhostLeave) this.elBtnGhostLeave.classList.remove('hidden');
       if (this.onRespawnCallback) this.onRespawnCallback();
     });
+
+    const returnToLobbyAction = () => {
+      // Rời phòng về sảnh tạo phòng mới, làm mới URL loại bỏ param ?room= nếu có
+      window.location.href = window.location.pathname;
+    };
+
+    if (this.elBtnBackLobby) this.elBtnBackLobby.addEventListener('click', returnToLobbyAction);
+    if (this.elBtnGhostLeave) this.elBtnGhostLeave.addEventListener('click', returnToLobbyAction);
+    if (this.elBtnServerLeave) this.elBtnServerLeave.addEventListener('click', returnToLobbyAction);
 
     // Action button Sói cắn
     this.elBtnAction.addEventListener('click', () => this.triggerCurrentAction());
@@ -521,6 +560,10 @@ export class UIManager {
           return;
         }
         if (this.currentRole === 'WEREWOLF') {
+          if (this.isClassic()) {
+            this.openWolfModal();
+            return;
+          }
           if (this.currentActionData) {
             this.triggerCurrentAction();
           } else {
@@ -583,25 +626,11 @@ export class UIManager {
       this.elMicStatus.addEventListener('click', async (e) => {
         e.stopPropagation();
         if (!this.isCurrentlyAlive) {
-          this.addChatMessage({
-            id: `mic_dead_${Date.now()}`,
-            senderId: 'system',
-            senderName: 'HỆ THỐNG',
-            text: '🔇 Bạn đã chết nên chỉ có thể nghe (Loa: Bật) và nhắn tin trong nhóm những người đã chết!',
-            timestamp: Date.now(),
-            isSystem: true,
-          });
+          this.addSystemChat('🔇 Bạn đã chết nên chỉ có thể nghe (Loa: Bật) và nhắn tin trong nhóm những người đã chết!');
           return;
         }
         if (this.currentPhase === GAME_PHASE.NIGHT && this.currentRole !== 'WEREWOLF') {
-          this.addChatMessage({
-            id: `mic_night_${Date.now()}`,
-            senderId: 'system',
-            senderName: 'HỆ THỐNG',
-            text: '🔇 Ban đêm Loa & Mic của bạn bị tắt để không nghe được cuộc trò chuyện của Ma Sói!',
-            timestamp: Date.now(),
-            isSystem: true,
-          });
+          this.addSystemChat('🔇 Ban đêm Loa & Mic của bạn bị tắt để không nghe được cuộc trò chuyện của Ma Sói!');
           return;
         }
         await this.soundManager.toggleUserMic();
@@ -664,7 +693,7 @@ export class UIManager {
   public setClearBotsHandler(cb: () => void) { this.onClearBotsCallback = cb; }
   public setRespawnHandler(cb: () => void) { this.onRespawnCallback = cb; }
   public setStartGameHandler(cb: () => void) { this.onStartGameCallback = cb; }
-  public setActionTriggerHandler(cb: (targetId: string, actionType: 'kill' | 'protect') => void) { this.onActionTriggerCallback = cb; }
+  public setActionTriggerHandler(cb: (targetId: string, actionType: 'kill' | 'protect' | 'classic_wolf_vote') => void) { this.onActionTriggerCallback = cb; }
   public setSeerActionHandler(cb: (targetId: string) => void) { this.onSeerActionCallback = cb; }
   public setWitchActionHandler(cb: (useHeal: boolean, poisonTargetId: string | null) => void) { this.onWitchActionCallback = cb; }
   public setHunterShootHandler(cb: (targetId: string | null) => void) { this.onHunterShootCallback = cb; }
@@ -731,6 +760,23 @@ export class UIManager {
     if (this.elHudRoomId) this.elHudRoomId.textContent = roomId;
   }
 
+  public isClassic(): boolean {
+    return this.currentEdition === 'CLASSIC';
+  }
+
+  public setEdition(edition: GameEditionType): void {
+    this.currentEdition = edition;
+    this.lastPlayerListSignature = '';
+    const badge = this.isClassic() ? '📜 Truyền Thống' : '⚔️ Biến Thể';
+    if (this.elHudRoomId) {
+      this.elHudRoomId.title = `Phòng: ${this.currentRoomId} (${badge})`;
+    }
+  }
+
+  public getEdition(): GameEditionType {
+    return this.currentEdition;
+  }
+
   public getRoomId(): string {
     return this.currentRoomId;
   }
@@ -795,18 +841,16 @@ export class UIManager {
 
       if (this.wasAlive) {
         this.wasAlive = false;
-        this.addChatMessage({
-          id: `death_reason_${Date.now()}`,
-          senderId: 'system',
-          senderName: 'HỆ THỐNG',
-          text: `💀 [THÔNG BÁO LÝ DO BỊ DIE] Bạn (${roleText}) đã bị loại! Nguyên nhân: ${reasonText}`,
-          timestamp: Date.now(),
-          isSystem: true,
-        });
+        this.addSystemChat(`💀 [THÔNG BÁO LÝ DO BỊ DIE] Bạn (${roleText}) đã bị loại! Nguyên nhân: ${reasonText}`);
       }
 
       if (!this.isSpectating && this.currentPhase !== GAME_PHASE.GAME_OVER) {
         this.elDeathScreen.classList.remove('hidden');
+        if (this.elBtnRespawn) this.elBtnRespawn.classList.remove('hidden');
+        if (this.elBtnBackLobby) {
+          this.elBtnBackLobby.classList.remove('hidden');
+          this.elBtnBackLobby.textContent = '🚪 RỜI PHÒNG VỀ SẢNH';
+        }
         this.elGameOverTitle.textContent = '💀 BẠN ĐÃ BỊ LOẠI!';
         this.elGameOverReason.innerHTML = `
           <div class="death-reason-highlight">
@@ -820,10 +864,14 @@ export class UIManager {
       this.elSpecialRolePanel.classList.add('hidden');
       this.hideVotingModal();
       this.isCurrentlyAlive = false;
+      if (this.isSpectating && this.elBtnGhostLeave) {
+        this.elBtnGhostLeave.classList.remove('hidden');
+      }
     } else {
       this.wasAlive = true;
       this.isCurrentlyAlive = true;
       this.isSpectating = false;
+      if (this.elBtnGhostLeave) this.elBtnGhostLeave.classList.add('hidden');
       if (this.currentPhase !== GAME_PHASE.GAME_OVER) {
         this.elDeathScreen.classList.add('hidden');
       }
@@ -887,7 +935,7 @@ export class UIManager {
       this.elSpecialRolePanel.classList.remove('hidden');
       this.elRoleSkillIcon.textContent = '🐺';
       this.elRoleSkillLabel.textContent = isNight
-        ? 'SĂN MỒI (ÁP SÁT <= 4.5M)'
+        ? (this.isClassic() ? 'BẦY SÓI VOTE (45s)' : 'SĂN MỒI (ÁP SÁT <= 4.5M)')
         : 'KỸ NĂNG: MA SÓI (ĐÊM)';
     } else if (this.currentRole === 'HUNTER') {
       this.elSpecialRolePanel.classList.remove('hidden');
@@ -954,6 +1002,7 @@ export class UIManager {
         this.elSeerModal.classList.add('hidden');
         this.elBodyguardModal.classList.add('hidden');
         this.elWitchModal.classList.add('hidden');
+        this.elWolfModal?.classList.add('hidden');
         this.elWolfPackPanel?.classList.add('hidden');
       }
 
@@ -1212,7 +1261,7 @@ export class UIManager {
     this.pendingWitchVictimId = prompt.victimId;
     this.elWitchVictimName.textContent = prompt.victimName;
 
-    if (prompt.hasHealPotion && !this.hasUsedWitchHeal) {
+    if (prompt.hasHealPotion && !this.hasUsedWitchHeal && prompt.victimId) {
       this.elWitchHealSection.classList.remove('hidden');
       this.elBtnWitchHeal.disabled = false;
       this.elBtnWitchHeal.textContent = '💉 DÙNG BÌNH CỨU (HỒI SINH NẠN NHÂN)';
@@ -1221,6 +1270,94 @@ export class UIManager {
     }
 
     this.openWitchModal();
+  }
+
+  // --- KỸ NĂNG BẦY MA SÓI (BẢN GỐC: VOTE 45S) ---
+  public openWolfModal(): void {
+    if (!this.elWolfModal || !this.elWolfVotePlayerList) return;
+    const container = this.elWolfVotePlayerList;
+    container.innerHTML = '';
+
+    // Lấy toàn bộ học sinh còn sống (bao gồm cả Sói, vì Sói có thể vote chính mình để đánh lừa)
+    const aliveTargets = this.cachedPlayers.filter((p) => p.isAlive);
+    if (aliveTargets.length === 0) {
+      const p = document.createElement('p');
+      p.textContent = 'Không có học sinh nào còn sống!';
+      p.style.color = '#94a3b8';
+      container.appendChild(p);
+    } else {
+      aliveTargets.forEach((target) => {
+        const item = document.createElement('div');
+        item.className = 'vote-player-item';
+        const isMe = target.id === this.myPlayerId;
+        const isVoted = this.myWolfVoteTargetId === target.id;
+        const selfTag = isMe ? ' <span style="color:#c084fc; font-size: 0.8rem;">(Bạn - có thể vote lừa)</span>' : '';
+        item.innerHTML = `
+          <span><strong>${target.name}</strong>${selfTag}</span>
+          <button class="vote-btn wolf-target-btn ${isVoted ? 'voted-btn' : ''}" data-id="${target.id}">
+            ${isVoted ? '🩸 ĐÃ VOTE' : '🐺 BẦU CẮN'}
+          </button>
+        `;
+        const btn = item.querySelector('.vote-btn') as HTMLButtonElement;
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.soundManager.playActionBeep();
+          this.myWolfVoteTargetId = target.id;
+          if (this.onActionTriggerCallback) {
+            this.onActionTriggerCallback(target.id, 'classic_wolf_vote');
+          }
+          this.openWolfModal();
+        });
+        container.appendChild(item);
+      });
+    }
+
+    this.elWolfModal.classList.remove('hidden');
+  }
+
+  public updateWolfModalStatus(status: WolfVoteUpdatePayload): void {
+    if (!this.elWolfModal) return;
+
+    if (this.elWolfModalCountdown && status.timeRemaining !== undefined) {
+      this.elWolfModalCountdown.textContent = `${status.timeRemaining}s`;
+    }
+
+    if (this.elWolfConsensusStatus) {
+      if (status.hasConsensus) {
+        this.elWolfConsensusStatus.textContent = `✅ ĐÃ ĐỒNG THUẬN CẮN [${status.targetName || 'MỤC TIÊU'}]! (> 2/3)`;
+        this.elWolfConsensusStatus.style.color = '#4ade80';
+      } else {
+        this.elWolfConsensusStatus.textContent = '⚠️ CHƯA ĐỒNG THUẬN (Cần > 2/3 phiếu)';
+        this.elWolfConsensusStatus.style.color = '#f87171';
+      }
+    }
+
+    if (this.elWolfConsensusFill) {
+      const pct = status.totalWolves > 0 ? (status.votesForTarget / status.totalWolves) * 100 : 0;
+      this.elWolfConsensusFill.style.width = `${pct}%`;
+      this.elWolfConsensusFill.style.backgroundColor = status.hasConsensus ? '#22c55e' : '#eab308';
+    }
+
+    if (this.elWolfConsensusDetails) {
+      this.elWolfConsensusDetails.textContent = `${status.votesForTarget}/${status.totalWolves} phiếu (Cần > 2/3 để chấp thuận)`;
+    }
+
+    // Cập nhật số phiếu hiển thị trên từng nút học sinh trong modal vote
+    if (this.elWolfVotePlayerList && status.voteCounts) {
+      const buttons = this.elWolfVotePlayerList.querySelectorAll<HTMLButtonElement>('.wolf-target-btn');
+      buttons.forEach((btn) => {
+        const id = btn.getAttribute('data-id');
+        if (id) {
+          const votes = status.voteCounts?.[id] || 0;
+          const isVoted = this.myWolfVoteTargetId === id;
+          if (votes > 0) {
+            btn.textContent = `${isVoted ? '🩸 ĐÃ VOTE' : '🐺 BẦU CẮN'} (${votes} phiếu)`;
+          } else {
+            btn.textContent = isVoted ? '🩸 ĐÃ VOTE' : '🐺 BẦU CẮN';
+          }
+        }
+      });
+    }
   }
 
   // --- KỸ NĂNG THỢ SĂN ---
@@ -1304,14 +1441,7 @@ export class UIManager {
           allBtns.forEach((b) => (b.disabled = true));
           if (this.elBtnVoteSkip) this.elBtnVoteSkip.disabled = true;
 
-          this.addChatMessage({
-            id: `voted_${Date.now()}`,
-            senderId: 'system',
-            senderName: 'HỆ THỐNG',
-            text: `Bạn đã bỏ phiếu chỉ định học sinh [${target.name}]! (Phiếu đã khóa, mỗi người chỉ được vote 1 lần)`,
-            timestamp: Date.now(),
-            isSystem: true,
-          });
+          this.addSystemChat(`Bạn đã bỏ phiếu chỉ định học sinh [${target.name}]! (Phiếu đã khóa, mỗi người chỉ được vote 1 lần)`);
 
           if (this.onVoteCallback) this.onVoteCallback(target.id);
         });
@@ -1427,6 +1557,20 @@ export class UIManager {
     this.elChatMessages.scrollTop = this.elChatMessages.scrollHeight;
   }
 
+  /**
+   * Helper thêm tin nhắn thông báo hệ thống vào khung chat một cách ngắn gọn, nhất quán
+   */
+  public addSystemChat(text: string, senderName: string = 'HỆ THỐNG'): void {
+    this.addChatMessage({
+      id: `sys_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      senderId: 'system',
+      senderName,
+      text,
+      timestamp: Date.now(),
+      isSystem: true,
+    });
+  }
+
   public showRoleGuideModal(role: PlayerRole): void {
     this.elRoleModal.classList.remove('hidden');
     if (role === 'WEREWOLF') {
@@ -1455,6 +1599,13 @@ export class UIManager {
 
   public showGameOver(winner: 'WEREWOLF' | 'VILLAGERS'): void {
     this.elDeathScreen.classList.remove('hidden');
+    if (this.elBtnRespawn) {
+      this.elBtnRespawn.classList.add('hidden');
+    }
+    if (this.elBtnBackLobby) {
+      this.elBtnBackLobby.classList.remove('hidden');
+      this.elBtnBackLobby.textContent = '🚪 VỀ SẢNH TẠO PHÒNG MỚI';
+    }
     if (winner === 'WEREWOLF') {
       this.elGameOverTitle.textContent = '🐺 MA SÓI CHIẾN THẮNG!';
       this.elGameOverReason.textContent = 'Số lượng Ma Sói đã hoàn toàn áp đảo học sinh! Toàn bộ trường học đã rơi vào đêm tối vĩnh hằng.';
@@ -1530,11 +1681,15 @@ export class UIManager {
       const itemClass = `player-item ${isMe ? 'is-me' : ''} ${isDead ? 'dead' : ''}`;
       const nameClass = isDead ? 'player-name-struck' : '';
       const icon = isDead ? '💀' : (p.isBot ? '🤖' : '👤');
+      const isClassic = this.isClassic();
       const revealedRole = ROLE_NAMES_VI[p.role] || p.role;
-      const statusText = isDead ? `💀 ${revealedRole}` : `${Math.round(p.hp)}%`;
+      const statusText = isDead
+        ? (isClassic ? '💀 ĐÃ CHẾT' : `💀 ${revealedRole}`)
+        : `${Math.round(p.hp)}%`;
       const statusClass = isDead ? 'dead' : 'alive';
       // Chỉ bản thân người chết (isMe) mới được biết lý do mình chết, người khác không được biết
-      const tooltipText = isMe && isDead && p.deathReason ? `${p.name} (${revealedRole}) - ${p.deathReason}` : p.name;
+      const roleHint = (!isClassic || isMe) ? ` (${revealedRole})` : '';
+      const tooltipText = isMe && isDead && p.deathReason ? `${p.name}${roleHint} - ${p.deathReason}` : p.name;
 
       html += `
         <div class="${itemClass}" title="${tooltipText}">
@@ -1558,6 +1713,9 @@ export class UIManager {
     isNight: boolean,
     localRole: PlayerRole
   ): void {
+    // Luôn cập nhật trạng thái trong Modal Sói (Bản Gốc)
+    this.updateWolfModalStatus(status);
+
     if (!this.elWolfPackPanel || !this.elWolfPackStatus || !this.elWolfPackVotes) return;
 
     if (!isNight || localRole !== 'WEREWOLF') {
@@ -1567,18 +1725,28 @@ export class UIManager {
 
     this.elWolfPackPanel.classList.remove('hidden');
 
-    if (status.isKillSuccessful) {
-      this.elWolfPackStatus.textContent = `🩸 ĐÃ CẮN HẠ [${status.targetName || 'MỤC TIÊU'}]!`;
-    } else if (status.hasConsensus) {
-      if (status.hasWolfNearby) {
-        this.elWolfPackStatus.textContent = `🐺 ĐÃ THỐNG NHẤT CẮN [${status.targetName}] - NHẤN F ĐỂ CẮN!`;
+    if (this.isClassic()) {
+      if (status.hasConsensus) {
+        this.elWolfPackStatus.textContent = `🐺 ĐÃ ĐỒNG THUẬN CẮN [${status.targetName}]! (> 2/3 phiếu)`;
+      } else if (status.targetName) {
+        this.elWolfPackStatus.textContent = `🐺 BẦY SÓI: [${status.targetName}] (${status.votesForTarget}/${status.totalWolves} phiếu - Cần > 2/3)`;
       } else {
-        this.elWolfPackStatus.textContent = `⚠️ ĐÃ THỐNG NHẤT (${status.votesForTarget}/${status.totalWolves}) - CẦN ÁP SÁT [${status.targetName}] (<= 4.5m)`;
+        this.elWolfPackStatus.textContent = `🐺 BẦY SÓI: CHƯA THỐNG NHẤT MỤC TIÊU (Cần > 2/3)`;
       }
-    } else if (status.targetName) {
-      this.elWolfPackStatus.textContent = `🐺 BẦY SÓI ĐANG CHỌN: [${status.targetName}] (${status.votesForTarget}/${status.totalWolves})`;
     } else {
-      this.elWolfPackStatus.textContent = `🐺 BẦY SÓI: CHƯA THỐNG NHẤT MỤC TIÊU (0/${status.totalWolves})`;
+      if (status.isKillSuccessful) {
+        this.elWolfPackStatus.textContent = `🩸 ĐÃ CẮN HẠ [${status.targetName || 'MỤC TIÊU'}]!`;
+      } else if (status.hasConsensus) {
+        if (status.hasWolfNearby) {
+          this.elWolfPackStatus.textContent = `🐺 ĐÃ THỐNG NHẤT CẮN [${status.targetName}] - NHẤN F ĐỂ CẮN!`;
+        } else {
+          this.elWolfPackStatus.textContent = `⚠️ ĐÃ THỐNG NHẤT (${status.votesForTarget}/${status.totalWolves}) - CẦN ÁP SÁT [${status.targetName}] (<= 4.5m)`;
+        }
+      } else if (status.targetName) {
+        this.elWolfPackStatus.textContent = `🐺 BẦY SÓI ĐANG CHỌN: [${status.targetName}] (${status.votesForTarget}/${status.totalWolves})`;
+      } else {
+        this.elWolfPackStatus.textContent = `🐺 BẦY SÓI: CHƯA THỐNG NHẤT MỤC TIÊU (0/${status.totalWolves})`;
+      }
     }
 
     if (status.wolfVotes && status.wolfVotes.length > 0) {

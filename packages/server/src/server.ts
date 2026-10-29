@@ -8,9 +8,30 @@ import { Server } from 'socket.io';
 import { GAME_CONFIG, SOCKET_EVENTS } from '@sinh-ton/shared';
 import { RoomManager } from './RoomManager';
 import { setupSocketHandlers } from './socketHandler';
+import { getLiveKitConfig } from './livekit';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Tự động tìm và load file .env từ thư mục gốc dự án hoặc thư mục server
+if (typeof (process as any).loadEnvFile === 'function') {
+  const possiblePaths = [
+    path.resolve(process.cwd(), '.env'),
+    path.resolve(__dirname, '../../../.env'),
+    path.resolve(__dirname, '../../.env'),
+    path.resolve(__dirname, '../.env'),
+  ];
+  for (const envPath of possiblePaths) {
+    if (fs.existsSync(envPath)) {
+      try {
+        (process as any).loadEnvFile(envPath);
+        break;
+      } catch {
+        // Tiếp tục kiểm tra
+      }
+    }
+  }
+}
 
 const app = express();
 app.use(cors());
@@ -71,5 +92,7 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`🎮 [Sinh Tồn Server] Đang chạy tại port: ${PORT}`);
   console.log(`⏱️ Tick Rate: ${GAME_CONFIG.TICK_RATE} ticks/giây (${GAME_CONFIG.TICK_INTERVAL_MS}ms)`);
   console.log(`🔮 Bán kính Kết giới: ${GAME_CONFIG.BARRIER_RADIUS}m`);
+  const lk = getLiveKitConfig();
+  console.log(`🎙️ [LiveKit WebRTC Voice]: ${lk.isConfigured ? '🟢 ĐÃ BẬT (' + lk.url + ')' : '🟡 CHƯA CẤU HÌNH (Sử dụng Web Audio nội bộ dự phòng)'}`);
   console.log(`=================================================`);
 });

@@ -1,4 +1,4 @@
-import { GamePhaseType, RoomModeType } from './constants';
+import { GamePhaseType, RoomModeType, GameEditionType } from './constants';
 
 export type PlayerRole = 'WEREWOLF' | 'VILLAGER' | 'SEER' | 'BODYGUARD' | 'WITCH' | 'HUNTER' | 'DOCTOR' | 'SPECTATOR';
 
@@ -39,6 +39,7 @@ export interface RoomInfo {
   roomName: string;
   hostId: string;
   mode: RoomModeType;
+  edition: GameEditionType;
   targetCount: number;
   playerCount: number;
   isBotMode: boolean;
@@ -49,6 +50,7 @@ export interface RoomCreatePayload {
   name: string;
   roomName: string;
   mode: RoomModeType;
+  edition?: GameEditionType;
   targetCount: number;
   enableBots: boolean;
 }
@@ -83,7 +85,7 @@ export interface AnnouncementMessage {
 
 export interface NightActionPayload {
   targetPlayerId?: string;
-  actionType: 'kill' | 'protect' | 'seer_check' | 'witch_heal' | 'witch_poison' | 'skip';
+  actionType: 'kill' | 'protect' | 'seer_check' | 'witch_heal' | 'witch_poison' | 'skip' | 'classic_wolf_vote';
 }
 
 export interface SeerResultPayload {
@@ -115,12 +117,16 @@ export interface HunterShootPayload {
 
 export interface WolfVoteUpdatePayload {
   targetName: string | null;
+  targetId?: string | null;
   votesForTarget: number;
   totalWolves: number;
   hasConsensus: boolean;
   hasWolfNearby: boolean;
   isKillSuccessful: boolean;
-  wolfVotes: { wolfName: string; targetName: string }[];
+  wolfVotes: { wolfId?: string; wolfName: string; targetId?: string; targetName: string }[];
+  voteCounts?: { [targetId: string]: number };
+  timeRemaining?: number;
+  isClassicMode?: boolean;
 }
 
 export interface VotePayload {
@@ -144,6 +150,9 @@ export interface GameStatePayload {
   winner?: 'WEREWOLF' | 'VILLAGERS' | null;
   roomId?: string;
   roomInfo?: RoomInfo;
+  edition?: GameEditionType;
+  classicWolfTimeRemaining?: number;
+  classicPhase?: 'WOLF_VOTE' | 'WITCH_ACTION' | 'DAY';
 }
 
 export interface PlayerDamagedPayload {

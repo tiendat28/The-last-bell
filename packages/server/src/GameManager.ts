@@ -4,6 +4,8 @@ import {
   GamePhaseType,
   ROOM_MODES,
   RoomModeType,
+  GAME_EDITIONS,
+  GameEditionType,
   RoomInfo,
   PlayerState,
   PlayerRole,
@@ -14,6 +16,7 @@ import {
   SeerResultPayload,
   WitchPromptPayload,
   HunterPromptPayload,
+  WolfVoteUpdatePayload,
   Vector3D,
   SCHOOL_ROOMS,
   ROLE_NAMES_VI,
@@ -25,6 +28,7 @@ export class GameManager {
   public roomName: string;
   public hostId: string;
   public mode: RoomModeType = ROOM_MODES.STANDARD_9_13;
+  public edition: GameEditionType = GAME_EDITIONS.CLASSIC;
   public targetCount: number = 10;
   public isBotMode: boolean = false;
 
@@ -37,6 +41,11 @@ export class GameManager {
   private phaseTimer: number = 0;
   private nightNumber: number = 0;
   private winner: 'WEREWOLF' | 'VILLAGERS' | null = null;
+
+  // Bản Gốc (Classic Mode): Quản lý thời gian thảo luận 45s của Sói & lượt Phù Thủy
+  private classicWolfVoteTimer: number = 45;
+  private classicWolfVoteResolved: boolean = false;
+  private classicWolfPunished: boolean = false;
 
   // Hành động trong đêm
   private nightKillTarget: string | null = null;
@@ -152,6 +161,18 @@ export class GameManager {
     };
   }
 
+  public isClassicEdition(): boolean {
+    return this.edition === GAME_EDITIONS.CLASSIC;
+  }
+
+  private formatVictimDeathAnnouncement(victim: PlayerState): string {
+    if (this.isClassicEdition()) {
+      return victim.name;
+    }
+    const roleName = ROLE_NAMES_VI[victim.role] || victim.role;
+    return `${victim.name} (Vai trò: ${roleName})`;
+  }
+
   private getPhaseDuration(phase: GamePhaseType): number {
     const durations = GAME_CONFIG.DEBUG_MODE
       ? GAME_CONFIG.PHASE_DURATIONS.DEBUG
@@ -159,6 +180,9 @@ export class GameManager {
 
     switch (phase) {
       case GAME_PHASE.NIGHT:
+        if (this.isClassicEdition()) {
+          return GAME_CONFIG.CLASSIC_MODE.NIGHT_TOTAL_TIME;
+        }
         return durations.NIGHT;
       case GAME_PHASE.DAY_DISCUSSION:
         return durations.DAY_DISCUSSION;
@@ -464,11 +488,18 @@ export class GameManager {
         this.nightPoisonTarget = null;
         this.seerCheckedThisNight = false;
         this.werewolfVotes.clear();
+        this.classicWolfVoteTimer = GAME_CONFIG.CLASSIC_MODE.WOLF_DISCUSSION_TIME;
+        this.classicWolfVoteResolved = false;
+        this.classicWolfPunished = false;
+
+        const nightMsg = this.isClassicEdition()
+          ? `Reng reng reng! Tiếng chuông đêm thứ ${this.nightNumber} đã điểm! Bầy Ma Sói có 45 giây bật Mic thảo luận và bỏ phiếu cắn mục tiêu (> 2/3 phiếu đồng thuận). Tiên Tri & Bảo Vệ hãy độc lập thực hiện nhiệm vụ!`
+          : 'Reng reng reng! Tiếng chuông nửa đêm đã điểm. Trường học chìm vào bóng tối ma mị. Ma Sói đã thức giấc, các vai trò đặc biệt hãy chuẩn bị hành động!';
 
         this.sendAnnouncement({
           id: `night_${this.nightNumber}`,
           title: 'LOA TRƯỜNG HỌC: ĐÊM THỨ ' + this.nightNumber,
-          content: 'Reng reng reng! Tiếng chuông nửa đêm đã điểm. Trường học chìm vào bóng tối ma mị. Ma Sói đã thức giấc, các vai trò đặc biệt hãy chuẩn bị hành động!',
+          content: nightMsg,
           type: 'bell',
           timestamp: Date.now(),
         });
@@ -781,6 +812,10 @@ export class GameManager {
   }
 
   private resolveNightActions(): void {
+    if (this.isClassicEdition() && !this.classicWolfVoteResolved) {
+      this.resolveClassicWolfVote();
+    }
+
     const deadVictims: PlayerState[] = [];
     const nightDeathDetails: string[] = [];
     const wolvesActivelyBitSomeone = this.nightKillTarget !== null;
@@ -806,8 +841,7 @@ export class GameManager {
           victim.isAlive = false;
           victim.deathReason = '🐺 Bị bầy Ma Sói cắn xé trong đêm tối!';
           deadVictims.push(victim);
-          const roleName = ROLE_NAMES_VI[victim.role] || victim.role;
-          nightDeathDetails.push(`${victim.name} (Vai trò: ${roleName})`);
+          nightDeathDetails.push(this.formatVictimDeathAnnouncement(victim));
         }
       }
     }
@@ -820,16 +854,20 @@ export class GameManager {
         poisonVictim.isAlive = false;
         poisonVictim.deathReason = '🧙☠️ Bị Phù Thủy dùng Bình Độc hạ sát trong đêm!';
         deadVictims.push(poisonVictim);
-        const roleName = ROLE_NAMES_VI[poisonVictim.role] || poisonVictim.role;
-        nightDeathDetails.push(`${poisonVictim.name} (Vai trò: ${roleName})`);
+        nightDeathDetails.push(this.formatVictimDeathAnnouncement(poisonVictim));
         console.log(`[GameManager] Học sinh ${poisonVictim.name} bị Phù Thủy hạ độc chết!`);
       }
     }
 
-    // 3. QUY TẮC SÓI: Sói CHỈ bị chết ngẫu nhiên vào buổi sáng khi trong đêm KHÔNG chủ động cắn ai!
-    // (Nếu Sói đã cắn 1 người nhưng người đó được Phù Thủy / Bảo Vệ / Bác Sĩ cứu thì Sói KHÔNG bị chết)
+    // 3. QUY TẮC SÓI:
+    // - Bản Gốc: Sói cố ý vote khác nhau, không vote hoặc không đạt > 2/3 phiếu -> Sáng hôm sau ngẫu nhiên 1 Sói chết!
+    // - Bản Ngoại Truyện: Sói CHỈ bị chết ngẫu nhiên khi trong đêm không chủ động cắn ai!
     let punishedWolf: PlayerState | null = null;
-    if (!wolvesActivelyBitSomeone) {
+    const shouldPunishWolf = this.isClassicEdition()
+      ? this.classicWolfPunished
+      : !wolvesActivelyBitSomeone;
+
+    if (shouldPunishWolf) {
       const aliveWolves = Array.from(this.players.values()).filter(
         (p) => p.isAlive && p.role === 'WEREWOLF'
       );
@@ -837,28 +875,34 @@ export class GameManager {
         punishedWolf = aliveWolves[Math.floor(Math.random() * aliveWolves.length)];
         punishedWolf.hp = 0;
         punishedWolf.isAlive = false;
-        punishedWolf.deathReason =
-          '⚡ Bị lời nguyền xử phạt chết ngẫu nhiên vào buổi sáng do trong đêm bầy Ma Sói không chủ động cắn ai!';
+        punishedWolf.deathReason = this.isClassicEdition()
+          ? '⚡ [Bản Gốc] Bị lời nguyền trừng phạt chết ngẫu nhiên do bầy Ma Sói không đồng thuận (> 2/3 phiếu) hoặc bỏ phiếu phân tán trong đêm!'
+          : '⚡ Bị lời nguyền xử phạt chết ngẫu nhiên vào buổi sáng do trong đêm bầy Ma Sói không chủ động cắn ai!';
         deadVictims.push(punishedWolf);
-        const wolfRoleName = ROLE_NAMES_VI[punishedWolf.role] || 'MA SÓI';
-        nightDeathDetails.push(
-          `${punishedWolf.name} (Vai trò: ${wolfRoleName} - Chết ngẫu nhiên do Sói không cắn ai trong đêm)`
-        );
+        const wolfDetail = this.isClassicEdition()
+          ? `${punishedWolf.name} (Bị lời nguyền trừng phạt chết ngẫu nhiên)`
+          : `${punishedWolf.name} (Vai trò: MA SÓI - Bị xử phạt chết ngẫu nhiên do trong đêm không chủ động cắn ai)`;
+        nightDeathDetails.push(wolfDetail);
         console.log(
-          `[GameManager] Trong đêm Sói không chủ động cắn ai! Sói ${punishedWolf.name} bị chết ngẫu nhiên vào buổi sáng!`
+          `[GameManager] Trong đêm Sói không đạt đồng thuận! Sói ${punishedWolf.name} bị trừng phạt chết ngẫu nhiên vào buổi sáng!`
         );
       }
     }
 
-    // 4. Loa thông báo buổi sáng cho các trường hợp chết trong đêm (Công bố Tên + Vai trò, không lộ nguyên nhân Phù Thủy giết)
+    // 4. Loa thông báo buổi sáng cho các trường hợp chết trong đêm (Bản truyền thống không làm lộ vai trò người chết)
     if (deadVictims.length > 0) {
       const summaryText = nightDeathDetails.join(' | ');
-      const title = punishedWolf
-        ? '📢 LOA TRƯỜNG HỌC: SÓI CHẾT NGẪU NHIÊN & THÔNG BÁO VAI TRÒ'
-        : '📢 LOA TRƯỜNG HỌC: ÁN MẠNG & CÔNG BỐ VAI TRÒ BUỔI SÁNG';
-      const content = punishedWolf && deadVictims.length === 1
-        ? `Reng reng reng! Đêm qua bầy Ma Sói không chủ động cắn học sinh nào! Theo luật nguyền, 1 Ma Sói đã bị chết ngẫu nhiên: ${summaryText}!`
-        : `Reng reng reng! Trời đã sáng! Danh sách học sinh tử nạn đêm qua và vai trò thực sự: ${summaryText}!`;
+      const title = this.isClassicEdition()
+        ? '📢 LOA TRƯỜNG HỌC: DANH SÁCH TỬ NẠN TRONG ĐÊM'
+        : (punishedWolf
+            ? '📢 LOA TRƯỜNG HỌC: SÓI CHẾT NGẪU NHIÊN & THÔNG BÁO VAI TRÒ'
+            : '📢 LOA TRƯỜNG HỌC: ÁN MẠNG & CÔNG BỐ VAI TRÒ BUỔI SÁNG');
+
+      const content = this.isClassicEdition()
+        ? `Reng reng reng! Trời đã sáng! Danh sách học sinh tử nạn đêm qua: ${summaryText}. Mời cả lớp tập trung thảo luận!`
+        : (punishedWolf && deadVictims.length === 1
+            ? `Reng reng reng! Đêm qua bầy Ma Sói không chủ động cắn học sinh nào! Theo luật nguyền, 1 Ma Sói đã bị chết ngẫu nhiên: ${summaryText}!`
+            : `Reng reng reng! Trời đã sáng! Danh sách học sinh tử nạn đêm qua và vai trò thực sự: ${summaryText}!`);
 
       this.sendAnnouncement({
         id: `death_${this.nightNumber}_${Date.now()}`,
@@ -1059,121 +1103,43 @@ export class GameManager {
     return { success: true, message: 'Hành động dùng thuốc của Phù Thủy đã được ghi nhận!' };
   }
 
-  public handleWerewolfKill(actorId: string, targetId: string): { success: boolean; message: string; consensus?: boolean } {
+  /**
+   * Kiểm tra tính hợp lệ của người chơi Sói thực hiện hành động đêm
+   */
+  private validateWolfActor(actorId: string): { valid: boolean; actor?: PlayerState; message?: string } {
     if (this.currentPhase !== GAME_PHASE.NIGHT) {
-      return { success: false, message: 'Chỉ có thể săn mồi vào ban đêm!' };
+      return { valid: false, message: 'Chỉ có thể hành động vào ban đêm!' };
     }
-
     const actor = this.players.get(actorId);
     if (!actor || !actor.isAlive || actor.role !== 'WEREWOLF') {
-      return { success: false, message: 'Chỉ Ma Sói mới có thể cắn người!' };
+      return { valid: false, message: 'Chỉ Ma Sói mới có thể thực hiện hành động này!' };
     }
-
-    const target = this.players.get(targetId);
-    if (!target || !target.isAlive) {
-      return { success: false, message: 'Mục tiêu không hợp lệ hoặc đã chết!' };
-    }
-
-    if (target.role === 'WEREWOLF') {
-      return { success: false, message: 'Không thể cắn đồng loại Ma Sói!' };
-    }
-
-    // Ghi nhận vote của con Sói này
-    this.werewolfVotes.set(actorId, target.id);
-
-    // Tự động đồng bộ các Bot Sói trong bầy cùng vote cho mục tiêu này
-    const wolfBots = Array.from(this.players.values()).filter((p) => p.isAlive && p.isBot && p.role === 'WEREWOLF');
-    for (const wb of wolfBots) {
-      this.werewolfVotes.set(wb.id, target.id);
-    }
-
-    // Danh sách toàn bộ Ma Sói còn sống
-    const aliveWolves = Array.from(this.players.values()).filter((p) => p.isAlive && p.role === 'WEREWOLF');
-    const totalWolves = aliveWolves.length;
-
-    // Đếm số Sói đã vote cho target này
-    const votesForTarget = aliveWolves.filter((w) => this.werewolfVotes.get(w.id) === target.id).length;
-    const hasConsensus = votesForTarget === totalWolves;
-
-    // Kiểm tra xem có ít nhất 1 Sói đứng cạnh con mồi (<= 4.5m)
-    const wolfNearTarget = aliveWolves.find((w) => {
-      const dist = Math.hypot(w.position.x - target.position.x, w.position.z - target.position.z);
-      return dist <= GAME_CONFIG.ACTION_RANGE;
-    });
-
-    // 1. Chưa đủ 100% Sói cùng vote
-    if (!hasConsensus) {
-      if (this.onWolfVoteUpdate) this.onWolfVoteUpdate(this.getWerewolfVoteStatus());
-      return {
-        success: false,
-        consensus: false,
-        message: `🐺 Bạn đã vote cắn [${target.name}]. Đồng thuận bầy Sói: ${votesForTarget}/${totalWolves} phiếu. Cần tất cả Sói cùng chọn con mồi này!`,
-      };
-    }
-
-    // 2. Toàn bộ Sói đã cùng vote nhưng chưa có con Sói nào đứng cạnh con mồi
-    if (!wolfNearTarget) {
-      if (this.onWolfVoteUpdate) this.onWolfVoteUpdate(this.getWerewolfVoteStatus());
-      return {
-        success: false,
-        consensus: true,
-        message: `⚠️ Bầy Sói đã thống nhất (${votesForTarget}/${totalWolves}) cắn [${target.name}]! Nhưng cần ít nhất 1 Sói áp sát con mồi trong phạm vi ${GAME_CONFIG.ACTION_RANGE}m để cắn!`,
-      };
-    }
-
-    // CẢ 2 ĐIỀU KIỆN ĐẠT: Toàn bộ Sói thống nhất + Có Sói đứng cạnh!
-    const isFirstKillConfirm = this.nightKillTarget !== target.id;
-    this.nightKillTarget = target.id;
-    console.log(`[GameManager] Bầy Sói (${totalWolves}/${totalWolves}) đã thống nhất và Sói ${wolfNearTarget.name} đã cắn ${target.name}!`);
-
-    // Báo cho Phù Thủy ngay lập tức (Bot Phù Thủy vẫn cứu bình thường như trước đó)
-    if (isFirstKillConfirm) {
-      for (const [id, p] of this.players.entries()) {
-        if (p.isAlive && p.role === 'WITCH') {
-          const pots = this.witchPotions.get(id) || { heal: true, poison: true };
-          if (p.isBot) {
-            if (pots.heal && Math.random() < 0.2) {
-              this.nightHealedByWitch = true;
-              pots.heal = false;
-              this.witchPotions.set(id, pots);
-              console.log(`[GameManager] Bot Phù Thủy đã dùng bình cứu hồi sinh ${target.name}!`);
-            }
-          } else if (this.onWitchPrompt) {
-            this.onWitchPrompt(id, {
-              victimId: target.id,
-              victimName: target.name,
-              hasHealPotion: pots.heal,
-              hasPoisonPotion: pots.poison,
-            });
-          }
-        }
-      }
-    }
-
-    if (this.onWolfVoteUpdate) {
-      this.onWolfVoteUpdate(this.getWerewolfVoteStatus());
-    }
-
-    return {
-      success: true,
-      consensus: true,
-      message: `🩸 Thành công! Sói [${wolfNearTarget.name}] đã áp sát và cắn xé học sinh [${target.name}] theo lệnh bầy Sói!`,
-    };
+    return { valid: true, actor };
   }
 
-  public getWerewolfVoteStatus(): {
-    targetName: string | null;
-    votesForTarget: number;
-    totalWolves: number;
-    hasConsensus: boolean;
-    hasWolfNearby: boolean;
-    isKillSuccessful: boolean;
-    wolfVotes: { wolfName: string; targetName: string }[];
-  } {
+  /**
+   * Đồng bộ phiếu bầu của các Bot Sói trong bầy
+   */
+  private syncWolfBotVotes(targetId: string | null): void {
+    const wolfBots = Array.from(this.players.values()).filter((p) => p.isAlive && p.isBot && p.role === 'WEREWOLF');
+    for (const wb of wolfBots) {
+      if (targetId) {
+        this.werewolfVotes.set(wb.id, targetId);
+      } else {
+        this.werewolfVotes.delete(wb.id);
+      }
+    }
+  }
+
+  /**
+   * Tính toán kiểm phiếu của bầy Sói cho đêm hiện tại
+   * Tránh lặp lại vòng lặp đếm phiếu giữa getWerewolfVoteStatus, resolveClassicWolfVote và handleWerewolfKill
+   */
+  private getWolfVoteTally() {
     const aliveWolves = Array.from(this.players.values()).filter((p) => p.isAlive && p.role === 'WEREWOLF');
     const totalWolves = aliveWolves.length;
-
     const targetCounts = new Map<string, number>();
+
     for (const w of aliveWolves) {
       const tid = this.werewolfVotes.get(w.id);
       if (tid) {
@@ -1190,8 +1156,211 @@ export class GameManager {
       }
     }
 
-    const topTarget = topTargetId ? this.players.get(topTargetId) : null;
-    const hasConsensus = maxVotes === totalWolves && totalWolves > 0;
+    const topTarget = topTargetId ? this.players.get(topTargetId) || null : null;
+    const isClassic = this.isClassicEdition();
+    const hasConsensus = isClassic
+      ? (totalWolves > 0 && maxVotes / totalWolves > 2 / 3)
+      : (maxVotes === totalWolves && totalWolves > 0);
+
+    return {
+      aliveWolves,
+      totalWolves,
+      targetCounts,
+      topTargetId,
+      topTarget,
+      maxVotes,
+      hasConsensus,
+    };
+  }
+
+  /**
+   * Thông báo cho Phù Thủy về nạn nhân trong đêm (hoặc không ai bị cắn) và xử lý Bot Phù Thủy
+   * Dùng chung cho cả Bản Gốc (Classic) và Bản Biến Thể (Spinoff)
+   */
+  private notifyWitch(target: PlayerState | null): void {
+    for (const [id, p] of this.players.entries()) {
+      if (p.isAlive && p.role === 'WITCH') {
+        const pots = this.witchPotions.get(id) || { heal: true, poison: true };
+        if (p.isBot) {
+          if (target && pots.heal && Math.random() < 0.25) {
+            this.nightHealedByWitch = true;
+            pots.heal = false;
+            this.witchPotions.set(id, pots);
+            console.log(`[GameManager] Bot Phù Thủy đã dùng bình cứu hồi sinh ${target.name}!`);
+          }
+        } else if (this.onWitchPrompt) {
+          this.onWitchPrompt(id, {
+            victimId: target ? target.id : '',
+            victimName: target ? target.name : 'Không có ai bị cắn đêm nay (Sói không đồng thuận)',
+            hasHealPotion: Boolean(target && pots.heal),
+            hasPoisonPotion: pots.poison,
+          });
+        }
+      }
+    }
+  }
+
+  /**
+   * Bản Gốc: Sói thảo luận 45s và bỏ phiếu chọn mục tiêu cắn (> 2/3 phiếu)
+   * Sói được phép vote chính mình để đánh lừa/tự sát.
+   */
+  public handleClassicWolfVote(actorId: string, targetId: string | null): { success: boolean; message: string; consensus?: boolean } {
+    const check = this.validateWolfActor(actorId);
+    if (!check.valid || !check.actor) {
+      return { success: false, message: check.message || 'Lỗi thao tác!' };
+    }
+
+    if (this.classicWolfVoteResolved) {
+      return { success: false, message: 'Thời gian 45 giây thảo luận của bầy Sói đã kết thúc!' };
+    }
+
+    if (targetId) {
+      const target = this.players.get(targetId);
+      if (!target || !target.isAlive) {
+        return { success: false, message: 'Mục tiêu không hợp lệ hoặc đã chết!' };
+      }
+      this.werewolfVotes.set(actorId, target.id);
+      this.syncWolfBotVotes(target.id);
+    } else {
+      this.werewolfVotes.delete(actorId);
+      this.syncWolfBotVotes(null);
+    }
+
+    const status = this.getWerewolfVoteStatus();
+    if (this.onWolfVoteUpdate) {
+      this.onWolfVoteUpdate(status);
+    }
+
+    return {
+      success: true,
+      consensus: status.hasConsensus,
+      message: targetId
+        ? `🐺 Bạn đã bỏ phiếu cắn [${this.players.get(targetId)?.name}]. Tỷ lệ hiện tại: ${status.votesForTarget}/${status.totalWolves} phiếu.`
+        : 'Đã hủy phiếu bầu.',
+    };
+  }
+
+  /**
+   * Bản Biến Thể (Ngoại Truyện): Ma Sói săn mồi 3D thời gian thực
+   * Yêu cầu: 100% Sói cùng vote + ít nhất 1 Sói áp sát <= 4.5m
+   */
+  public handleSpinoffWolfKill(actorId: string, targetId: string | null): { success: boolean; message: string; consensus?: boolean } {
+    const check = this.validateWolfActor(actorId);
+    if (!check.valid || !check.actor) {
+      return { success: false, message: check.message || 'Lỗi thao tác!' };
+    }
+
+    if (!targetId) {
+      this.werewolfVotes.delete(actorId);
+      this.syncWolfBotVotes(null);
+      if (this.onWolfVoteUpdate) this.onWolfVoteUpdate(this.getWerewolfVoteStatus());
+      return { success: true, message: 'Đã hủy chọn mục tiêu.' };
+    }
+
+    const target = this.players.get(targetId);
+    if (!target || !target.isAlive) {
+      return { success: false, message: 'Mục tiêu không hợp lệ hoặc đã chết!' };
+    }
+
+    if (target.role === 'WEREWOLF') {
+      return { success: false, message: 'Không thể cắn đồng loại Ma Sói!' };
+    }
+
+    this.werewolfVotes.set(actorId, target.id);
+    this.syncWolfBotVotes(target.id);
+
+    const { aliveWolves, totalWolves, maxVotes, hasConsensus } = this.getWolfVoteTally();
+
+    // Kiểm tra có Sói đứng cạnh <= 4.5m
+    const wolfNearTarget = aliveWolves.find((w) => {
+      const dist = Math.hypot(w.position.x - target.position.x, w.position.z - target.position.z);
+      return dist <= GAME_CONFIG.ACTION_RANGE;
+    });
+
+    if (!hasConsensus) {
+      if (this.onWolfVoteUpdate) this.onWolfVoteUpdate(this.getWerewolfVoteStatus());
+      return {
+        success: false,
+        consensus: false,
+        message: `🐺 Bạn đã vote cắn [${target.name}]. Đồng thuận bầy Sói: ${maxVotes}/${totalWolves} phiếu. Cần tất cả Sói cùng chọn con mồi này!`,
+      };
+    }
+
+    if (!wolfNearTarget) {
+      if (this.onWolfVoteUpdate) this.onWolfVoteUpdate(this.getWerewolfVoteStatus());
+      return {
+        success: false,
+        consensus: true,
+        message: `⚠️ Bầy Sói đã thống nhất (${maxVotes}/${totalWolves}) cắn [${target.name}]! Nhưng cần ít nhất 1 Sói áp sát con mồi trong phạm vi ${GAME_CONFIG.ACTION_RANGE}m để cắn!`,
+      };
+    }
+
+    const isFirstKillConfirm = this.nightKillTarget !== target.id;
+    this.nightKillTarget = target.id;
+    console.log(`[GameManager - Spinoff] Bầy Sói (${totalWolves}/${totalWolves}) đã thống nhất và Sói ${wolfNearTarget.name} đã cắn ${target.name}!`);
+
+    if (isFirstKillConfirm) {
+      this.notifyWitch(target);
+    }
+
+    if (this.onWolfVoteUpdate) {
+      this.onWolfVoteUpdate(this.getWerewolfVoteStatus());
+    }
+
+    return {
+      success: true,
+      consensus: true,
+      message: `🩸 Thành công! Sói [${wolfNearTarget.name}] đã áp sát và cắn xé học sinh [${target.name}] theo lệnh bầy Sói!`,
+    };
+  }
+
+  /**
+   * Điều phối hành động Sói ban đêm theo chế độ chơi (Bản Gốc vs Bản Biến Thể)
+   */
+  public handleWerewolfKill(actorId: string, targetId: string | null): { success: boolean; message: string; consensus?: boolean } {
+    if (this.isClassicEdition()) {
+      return this.handleClassicWolfVote(actorId, targetId);
+    }
+    return this.handleSpinoffWolfKill(actorId, targetId);
+  }
+
+  /**
+   * Bản Gốc: Chốt kết quả bỏ phiếu của bầy Sói sau 45 giây thảo luận
+   */
+  public resolveClassicWolfVote(): void {
+    if (this.classicWolfVoteResolved) return;
+    this.classicWolfVoteResolved = true;
+
+    const { totalWolves, topTarget, maxVotes, hasConsensus } = this.getWolfVoteTally();
+
+    if (totalWolves === 0) {
+      this.nightKillTarget = null;
+      this.classicWolfPunished = false;
+      return;
+    }
+
+    if (hasConsensus && topTarget && topTarget.isAlive) {
+      this.nightKillTarget = topTarget.id;
+      this.classicWolfPunished = false;
+      console.log(`[GameManager - Classic] Bầy Sói đã thống nhất (${maxVotes}/${totalWolves} phiếu > 2/3) cắn ${topTarget.name}!`);
+      this.notifyWitch(topTarget);
+    } else {
+      // Trường hợp Sói cố ý vote khác nhau or không vote (không đạt > 2/3):
+      // Bị trừng phạt, sáng sau ngẫu nhiên 1 sói chết!
+      this.nightKillTarget = null;
+      this.classicWolfPunished = true;
+      console.log(`[GameManager - Classic] Bầy Sói KHÔNG đạt đồng thuận (${maxVotes}/${totalWolves} <= 2/3)! Sẽ bị trừng phạt ngẫu nhiên 1 Sói chết vào sáng mai.`);
+      this.notifyWitch(null);
+    }
+
+    if (this.onWolfVoteUpdate) {
+      this.onWolfVoteUpdate(this.getWerewolfVoteStatus());
+    }
+  }
+
+  public getWerewolfVoteStatus(): WolfVoteUpdatePayload {
+    const { aliveWolves, totalWolves, targetCounts, topTargetId, topTarget, maxVotes, hasConsensus } = this.getWolfVoteTally();
+    const isClassic = this.isClassicEdition();
 
     let hasWolfNearby = false;
     if (topTarget) {
@@ -1205,19 +1374,30 @@ export class GameManager {
       const tid = this.werewolfVotes.get(w.id);
       const targetP = tid ? this.players.get(tid) : null;
       return {
+        wolfId: w.id,
         wolfName: w.name,
+        targetId: tid,
         targetName: targetP ? targetP.name : 'Chưa vote',
       };
     });
 
+    const voteCountsObj: { [id: string]: number } = {};
+    for (const [tid, count] of targetCounts.entries()) {
+      voteCountsObj[tid] = count;
+    }
+
     return {
       targetName: topTarget ? topTarget.name : null,
+      targetId: topTargetId,
       votesForTarget: maxVotes,
       totalWolves,
       hasConsensus,
       hasWolfNearby,
       isKillSuccessful: this.nightKillTarget !== null,
       wolfVotes: wolfVotesList,
+      voteCounts: voteCountsObj,
+      timeRemaining: isClassic ? Math.max(0, Math.ceil(this.classicWolfVoteTimer)) : Math.max(0, Math.ceil(this.phaseTimer)),
+      isClassicMode: isClassic,
     };
   }
 
@@ -1302,11 +1482,14 @@ export class GameManager {
         eliminated.deathReason = `⚖️ Bị toàn trường bỏ phiếu biểu quyết TREO CỔ (${highestVotes}/${totalAlive} phiếu)!`;
 
         const roleText = ROLE_NAMES_VI[eliminated.role] || eliminated.role;
+        const announcementContent = this.isClassicEdition()
+          ? `Đã đủ phiếu biểu quyết! Học sinh ${eliminated.name} nhận số phiếu ${highestVotes}/${totalAlive} và đã bị TREO CỔ!`
+          : `Đã đủ phiếu biểu quyết! Nhân vật ${eliminated.name} nhận số phiếu ${highestVotes}/${totalAlive} và đã bị TREO CỔ! Vai trò thực sự là: ${roleText}!`;
 
         this.sendAnnouncement({
           id: `lynch_${Date.now()}`,
           title: '⚖️ LOA TRƯỜNG HỌC: KẾT QUẢ BỎ PHIẾU TREO CỔ',
-          content: `Đã đủ phiếu biểu quyết! Nhân vật ${eliminated.name} nhận số phiếu ${highestVotes}/${totalAlive} và đã bị TREO CỔ! Vai trò thực sự là: ${roleText}!`,
+          content: announcementContent,
           type: 'death',
           timestamp: Date.now(),
         });
@@ -1386,6 +1569,17 @@ export class GameManager {
     if (this.currentPhase !== GAME_PHASE.LOBBY && this.currentPhase !== GAME_PHASE.GAME_OVER) {
       this.phaseTimer -= dt;
 
+      // Bản Gốc: Đếm ngược 45s thảo luận & bỏ phiếu của Sói
+      if (this.currentPhase === GAME_PHASE.NIGHT && this.isClassicEdition()) {
+        if (!this.classicWolfVoteResolved) {
+          this.classicWolfVoteTimer -= dt;
+          if (this.classicWolfVoteTimer <= 0) {
+            this.classicWolfVoteTimer = 0;
+            this.resolveClassicWolfVote();
+          }
+        }
+      }
+
       if (this.phaseTimer <= 0) {
         switch (this.currentPhase) {
           case GAME_PHASE.DAY_HIDING:
@@ -1447,6 +1641,7 @@ export class GameManager {
       roomName: this.roomName,
       hostId: this.hostId,
       mode: this.mode,
+      edition: this.edition,
       targetCount: this.targetCount,
       playerCount: this.players.size,
       isBotMode: this.isBotMode,
@@ -1474,6 +1669,13 @@ export class GameManager {
       roomId: this.roomId,
       roomInfo: this.getRoomInfo(),
       doors: { ...this.doors },
+      edition: this.edition,
+      classicWolfTimeRemaining: this.isClassicEdition() ? Math.max(0, Math.ceil(this.classicWolfVoteTimer)) : undefined,
+      classicPhase: this.isClassicEdition()
+        ? (this.currentPhase === GAME_PHASE.NIGHT
+            ? (!this.classicWolfVoteResolved ? 'WOLF_VOTE' : 'WITCH_ACTION')
+            : 'DAY')
+        : undefined,
     };
   }
 

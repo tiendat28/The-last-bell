@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@sinh-ton/shared": "*",
+    "livekit-client": "^2.23.0",
     "socket.io-client": "^4.8.1",
     "three": "^0.170.0"
   },
@@ -19,4 +20,3 @@
     "vite": "^6.0.7"
   }
 }
-

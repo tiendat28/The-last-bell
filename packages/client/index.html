@@ -32,6 +32,7 @@
           </div>
           <div class="hp-text" id="hud-hp-text">100 / 100 HP</div>
         </div>
+        <button id="btn-ghost-leave" class="ghost-leave-btn hidden" title="Rời chế độ quan sát về sảnh tạo phòng mới">🚪 VỀ SẢNH TẠO PHÒNG</button>
       </div>
 
       <!-- Left Center: Danh Sách Học Sinh Trong Trường & Trạng Thái Sống / Chết -->
@@ -81,6 +82,7 @@
         
         <!-- Control Buttons -->
         <button id="btn-start-game" class="game-btn primary mini-btn">BẮT ĐẦU TRẬN ĐẤU</button>
+        <button id="btn-server-leave" class="game-btn secondary mini-btn leave-room-btn" style="margin-top: 5px;" title="Rời phòng hiện tại về sảnh tạo phòng mới">🚪 VỀ SẢNH</button>
         
         <div class="bot-control-row" id="bot-control-row">
           <button id="btn-fill-bots" class="bot-btn" title="Lấp đầy Bot theo số lượng phòng">🤖 LẤP ĐẦY BOT</button>
@@ -169,6 +171,39 @@
         <span id="wolf-pack-status">BẦY SÓI: CHƯA THỐNG NHẤT MỤC TIÊU</span>
       </div>
       <div id="wolf-pack-votes" class="wolf-pack-votes"></div>
+    </div>
+  </div>
+
+  <!-- Modal Ma Sói Ban Đêm (Bản Gốc: Thảo Luận 45s & Bỏ Phiếu Cắn) -->
+  <div id="wolf-modal" class="modal-overlay hidden">
+    <div class="modal-card wolf-modal-card">
+      <div class="modal-badge wolf-badge">HỘI ĐỒNG MA SÓI</div>
+      <h2 class="modal-title">🐺 BẦY SÓI BIỂU QUYẾT TRONG ĐÊM</h2>
+      <div class="wolf-modal-timer-bar">
+        <span>⏳ THỜI GIAN THẢO LUẬN & VOTE CÒN:</span>
+        <strong id="wolf-modal-countdown">45s</strong>
+      </div>
+      <p class="modal-desc">
+        Mic bầy Sói đang được bật để trao đổi! Hãy chọn 1 người để vote cắn (cần <strong>&gt; 2/3 phiếu đồng thuận</strong>).
+        <br><span style="color: #fca5a5; font-size: 0.8rem;">⚠️ Nếu các Sói cố ý vote khác nhau or không vote (&le; 2/3 phiếu), 1 Ma Sói sẽ bị trừng phạt chết ngẫu nhiên vào sáng mai! (Có thể vote chính mình để đánh lừa)</span>
+      </p>
+
+      <div class="wolf-consensus-box" id="wolf-consensus-box">
+        <div class="consensus-status-line">
+          Trạng thái: <strong id="wolf-consensus-status">CHƯA ĐỒNG THUẬN</strong>
+        </div>
+        <div class="consensus-progress-bar">
+          <div class="consensus-progress-fill" id="wolf-consensus-fill" style="width: 0%;"></div>
+        </div>
+        <div class="consensus-details" id="wolf-consensus-details">0/0 phiếu (Cần &gt; 2/3)</div>
+      </div>
+
+      <div class="vote-player-list" id="wolf-vote-player-list"></div>
+
+      <div class="vote-actions">
+        <button id="btn-wolf-skip-vote" class="game-btn secondary">HỦY PHIẾU BẦU</button>
+        <button id="btn-close-wolf-modal" class="game-btn primary">ĐÓNG BẢNG (VẪN BẬT MIC)</button>
+      </div>
     </div>
   </div>
 
@@ -265,7 +300,10 @@
     <div class="death-box">
       <h1 class="death-title" id="game-over-title">BẠN ĐÃ BỊ LOẠI</h1>
       <p class="death-reason" id="game-over-reason">Bạn đã bị nuốt chửng linh hồn!</p>
-      <button id="btn-respawn" class="game-btn primary">QUAN SÁT TIẾP TRẬN ĐẤU (HỒN MA)</button>
+      <div class="death-actions">
+        <button id="btn-respawn" class="game-btn secondary">👻 QUAN SÁT TIẾP TRẬN ĐẤU (HỒN MA)</button>
+        <button id="btn-back-lobby" class="game-btn primary">🚪 VỀ SẢNH TẠO PHÒNG</button>
+      </div>
     </div>
   </div>
 
@@ -273,8 +311,8 @@
   <div id="join-modal" class="modal-overlay">
     <div class="modal-card room-lobby-card">
       <div class="lobby-header">
-        <div class="modal-badge">TIẾNG CHUÔNG CUỐI CÙNG</div>
-        <h2 class="modal-title">SINH TỒN 3D - SẢNH PHÒNG</h2>
+        <div class="modal-title">THE LAST BELL</div>
+        <h2 class="modal-badge">SINH TỒN 3D - SẢNH PHÒNG</h2>
       </div>
 
       <!-- Tab Buttons -->
@@ -294,6 +332,14 @@
           <div class="form-group">
             <label for="create-room-name">🏫 Tên phòng:</label>
             <input type="text" id="create-room-name" value="Lớp Học Nửa Đêm" maxlength="20" autocomplete="off" />
+          </div>
+
+          <div class="form-group edition-group" style="grid-column: 1 / -1;">
+            <label for="select-room-edition">📖 Phiên bản trò chơi:</label>
+            <select id="select-room-edition" class="custom-select">
+              <option value="CLASSIC" selected>📜 Truyền thống</option>
+              <option value="SPINOFF">⚔️ Biến thể</option>
+            </select>
           </div>
 
           <div class="form-group mode-group">

@@ -1,13 +1,20 @@
+import { LiveKitVoiceManager } from './LiveKitVoiceManager';
+
 /**
  * Hệ thống âm thanh Web Audio API Synthesizer (Đã nâng cấp chất lượng cao)
  * Tự động tạo âm thanh chuông trường học, chuông báo tử, tiếng súng, tiếng sói hú
  * Tích hợp Master Compressor & Biquad Filter chống rè, chống đè vọng (Anti-clipping & Debouncing)
+ * Hỗ trợ chuyển đổi sang LiveKit WebRTC Voice Engine khi có kết nối
  */
 export class SoundManager {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
   private compressor: DynamicsCompressorNode | null = null;
   private masterFilter: BiquadFilterNode | null = null;
+
+  // LiveKit WebRTC Voice Engine
+  public liveKitVoiceManager: LiveKitVoiceManager | null = null;
+  public isLiveKitActive: boolean = false;
 
   // Debounce cooldowns (tránh các âm thanh bị gọi trùng lặp cùng lúc gây đè vọng / rè)
   private lastBellTime: number = 0;
@@ -76,6 +83,32 @@ export class SoundManager {
   }
 
   /**
+   * Helper tạo chuỗi node synthesizer chuẩn: Oscillator -> Filter -> Gain -> Destination
+   */
+  private createSynthVoice(
+    type: OscillatorType = 'sine',
+    filterFreq: number = 2000,
+    filterType: BiquadFilterType = 'lowpass'
+  ): { osc: OscillatorNode; gain: GainNode; filter: BiquadFilterNode } | null {
+    const dest = this.getDestinationNode();
+    if (!this.ctx || !dest) return null;
+
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    const filter = this.ctx.createBiquadFilter();
+
+    osc.type = type;
+    filter.type = filterType;
+    filter.frequency.setValueAtTime(filterFreq, this.ctx.currentTime);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(dest);
+
+    return { osc, gain, filter };
+  }
+
+  /**
    * 1. Tiếng chuông trường học (Reng reng reng... Westminster Chime)
    * Âm sắc kim loại êm dịu, ấm áp, không chói gắt, có chống đè vọng
    */
@@ -84,8 +117,8 @@ export class SoundManager {
     if (nowMs - this.lastBellTime < 1500) return; // Chống đè vọng trong vòng 1.5s
     this.lastBellTime = nowMs;
 
-    const dest = this.getDestinationNode();
-    if (!this.ctx || !dest) return;
+    if (!this.ctx) this.initContext();
+    if (!this.ctx) return;
 
     const now = this.ctx.currentTime;
     // Hợp âm 4 nốt chuông trường học êm ái: C5, E5, G5, C6
@@ -97,27 +130,15 @@ export class SoundManager {
     ];
 
     notes.forEach((note) => {
-      const osc = this.ctx!.createOscillator();
-      const gain = this.ctx!.createGain();
-      const filter = this.ctx!.createBiquadFilter();
-
-      // Dùng sóng Sine thuần khiết + filter ấm áp
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(note.freq, now + note.delay);
-
-      filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(3200, now + note.delay);
-
+      const voice = this.createSynthVoice('sine', 3200);
+      if (!voice) return;
+      const { osc, gain } = voice;
       const startTime = now + note.delay;
-      gain.gain.setValueAtTime(0.0001, startTime);
-      // Soft attack 20ms tránh tiếng "tách"
-      gain.gain.linearRampToValueAtTime(0.22, startTime + 0.025);
-      // Exponential decay ngân dài êm ái
-      gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 1.1);
 
-      osc.connect(filter);
-      filter.connect(gain);
-      gain.connect(dest);
+      osc.frequency.setValueAtTime(note.freq, startTime);
+      gain.gain.setValueAtTime(0.0001, startTime);
+      gain.gain.linearRampToValueAtTime(0.22, startTime + 0.025);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 1.1);
 
       osc.start(startTime);
       osc.stop(startTime + 1.15);
@@ -133,8 +154,8 @@ export class SoundManager {
     if (nowMs - this.lastDeathBellTime < 2000) return; // Chống gọi dồn dập
     this.lastDeathBellTime = nowMs;
 
-    const dest = this.getDestinationNode();
-    if (!this.ctx || !dest) return;
+    if (!this.ctx) this.initContext();
+    if (!this.ctx) return;
 
     const now = this.ctx.currentTime;
     // Tần số trầm ấm A2 (110Hz) và các họa âm êm
@@ -145,23 +166,14 @@ export class SoundManager {
     ];
 
     harmonics.forEach((h) => {
-      const osc = this.ctx!.createOscillator();
-      const gain = this.ctx!.createGain();
-      const filter = this.ctx!.createBiquadFilter();
+      const voice = this.createSynthVoice('sine', 1000);
+      if (!voice) return;
+      const { osc, gain } = voice;
 
-      osc.type = 'sine';
       osc.frequency.setValueAtTime(h.freq, now);
-
-      filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(1000, now);
-
       gain.gain.setValueAtTime(0.0001, now);
       gain.gain.linearRampToValueAtTime(h.gainVal, now + 0.05);
       gain.gain.exponentialRampToValueAtTime(0.0001, now + h.dur);
-
-      osc.connect(filter);
-      filter.connect(gain);
-      gain.connect(dest);
 
       osc.start(now);
       osc.stop(now + h.dur + 0.1);
@@ -286,14 +298,14 @@ export class SoundManager {
     if (nowMs - this.lastBeepTime < 80) return;
     this.lastBeepTime = nowMs;
 
-    const dest = this.getDestinationNode();
-    if (!this.ctx || !dest) return;
+    if (!this.ctx) this.initContext();
+    if (!this.ctx) return;
 
+    const voice = this.createSynthVoice('sine', 2800);
+    if (!voice) return;
+    const { osc, gain } = voice;
     const now = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
 
-    osc.type = 'sine';
     osc.frequency.setValueAtTime(720, now);
     osc.frequency.exponentialRampToValueAtTime(960, now + 0.08);
 
@@ -301,11 +313,24 @@ export class SoundManager {
     gain.gain.linearRampToValueAtTime(0.12, now + 0.015);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
 
-    osc.connect(gain);
-    gain.connect(dest);
-
     osc.start(now);
     osc.stop(now + 0.13);
+  }
+
+  /**
+   * Kích hoạt engine giọng nói LiveKit WebRTC
+   */
+  public enableLiveKit(liveKitManager: LiveKitVoiceManager): void {
+    this.liveKitVoiceManager = liveKitManager;
+    this.isLiveKitActive = true;
+    if (this.micProcessor) {
+      this.micProcessor.disconnect();
+      this.micProcessor = null;
+    }
+    if (this.micStream) {
+      this.micStream.getTracks().forEach((t) => t.stop());
+      this.micStream = null;
+    }
   }
 
   /**
@@ -318,6 +343,12 @@ export class SoundManager {
     this.canSpeakByRule = canSpeak;
     this.canListenByRule = canListen;
 
+    if (this.isLiveKitActive && this.liveKitVoiceManager) {
+      this.liveKitVoiceManager.setMicrophoneEnabled(canSpeak && !this.isUserMicMuted);
+      this.liveKitVoiceManager.setSpeakerEnabled(canListen);
+      return;
+    }
+
     if (this.micStream) {
       const active = this.canSpeakByRule && !this.isUserMicMuted;
       this.micStream.getAudioTracks().forEach((track) => {
@@ -327,10 +358,16 @@ export class SoundManager {
   }
 
   public isMicActive(): boolean {
+    if (this.isLiveKitActive && this.liveKitVoiceManager) {
+      return this.canSpeakByRule && this.liveKitVoiceManager.getIsMicEnabled();
+    }
     return this.canSpeakByRule && !this.isUserMicMuted;
   }
 
   public isSpeakerActive(): boolean {
+    if (this.isLiveKitActive && this.liveKitVoiceManager) {
+      return this.canListenByRule && this.liveKitVoiceManager.getIsSpeakerEnabled();
+    }
     return this.canListenByRule;
   }
 
@@ -341,6 +378,12 @@ export class SoundManager {
   public async toggleUserMic(): Promise<boolean> {
     if (!this.canSpeakByRule) {
       return false;
+    }
+
+    if (this.isLiveKitActive && this.liveKitVoiceManager) {
+      const state = await this.liveKitVoiceManager.toggleMicrophone();
+      this.isUserMicMuted = !state;
+      return state;
     }
 
     if (!this.micStream && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
@@ -394,14 +437,24 @@ export class SoundManager {
   }
 
   public playIncomingVoice(samples: number[], sampleRate: number): void {
+    // Nếu LiveKit WebRTC đang hoạt động, bỏ qua audio raw từ socket để tránh phát trùng lặp
+    if (this.isLiveKitActive) return;
     if (!this.canListenByRule || !samples || samples.length === 0) return;
     const dest = this.getDestinationNode();
     if (!this.ctx || !dest) return;
 
     const buffer = this.ctx.createBuffer(1, samples.length, sampleRate || 22050);
     const channel = buffer.getChannelData(0);
+    // Áp dụng micro-ramp taper ở đầu và đuôi chunk âm thanh (triệt tiêu tiếng lách tách / rè do ngắt quãng gói tin)
+    const rampLen = Math.min(64, Math.floor(samples.length / 8));
     for (let i = 0; i < samples.length; i++) {
-      channel[i] = samples[i];
+      let val = samples[i];
+      if (i < rampLen) {
+        val *= i / rampLen;
+      } else if (i >= samples.length - rampLen) {
+        val *= (samples.length - 1 - i) / rampLen;
+      }
+      channel[i] = val;
     }
 
     const src = this.ctx.createBufferSource();

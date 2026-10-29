@@ -2,9 +2,11 @@ import './style.css';
 import { GameScene } from './game/GameScene';
 import { NetworkManager } from './network/NetworkManager';
 import { UIManager } from './ui/UIManager';
+import { LiveKitVoiceManager } from './audio/LiveKitVoiceManager';
 
-// 1. Khởi tạo UIManager
+// 1. Khởi tạo UIManager & LiveKit Voice Manager
 const uiManager = new UIManager();
+const liveKitVoiceManager = new LiveKitVoiceManager();
 
 // 2. Khởi tạo GameScene 3D Three.js
 const container = document.getElementById('game-container')!;
@@ -21,18 +23,14 @@ const networkManager = new NetworkManager({
   },
   onPlayerJoined: (player) => {
     console.log(`[Game] Học sinh mới vào phòng: ${player.name}`);
-    uiManager.addChatMessage({
-      id: `sys_${Date.now()}`,
-      senderId: 'system',
-      senderName: 'HỆ THỐNG',
-      text: `${player.name} vừa bước vào trường học.`,
-      timestamp: Date.now(),
-      isSystem: true,
-    });
+    uiManager.addSystemChat(`${player.name} vừa bước vào trường học.`);
   },
   onSyncState: (state) => {
     if (state.roomId) {
       uiManager.setRoomId(state.roomId);
+    }
+    if (state.edition) {
+      uiManager.setEdition(state.edition);
     }
     gameScene.handleSyncState(state);
   },
@@ -79,10 +77,22 @@ const networkManager = new NetworkManager({
   onVoiceData: (data) => {
     uiManager.soundManager.playIncomingVoice(data.samples, data.sampleRate);
   },
+  onVoiceTokenReady: async (data) => {
+    if (data.provider === 'livekit' && data.url && data.token) {
+      console.log('[LiveKit WebRTC] Nhận Voice Token, đang kết nối...');
+      const success = await liveKitVoiceManager.connect(data.url, data.token);
+      if (success) {
+        uiManager.soundManager.enableLiveKit(liveKitVoiceManager);
+        uiManager.addSystemChat('🎙️ LiveKit WebRTC Voice Chat đã kích hoạt (Chuẩn âm thanh Opus, không rè, không trễ)!');
+      }
+    }
+  },
 });
 
 uiManager.soundManager.onVoiceSamples = (samples, sampleRate) => {
-  networkManager.sendVoiceData(samples, sampleRate);
+  if (!uiManager.soundManager.isLiveKitActive) {
+    networkManager.sendVoiceData(samples, sampleRate);
+  }
 };
 
 gameScene.setNetworkManager(networkManager);
@@ -97,14 +107,7 @@ uiManager.setCreateRoomHandler((payload) => {
   networkManager.createRoom(payload, (res) => {
     if (res && res.roomId) {
       uiManager.setRoomId(res.roomId);
-      uiManager.addChatMessage({
-        id: `room_created_${Date.now()}`,
-        senderId: 'system',
-        senderName: 'HỆ THỐNG',
-        text: `Đã tạo phòng [${res.roomId}]: ${payload.roomName}. Bấm nút "MỜI" ở góc phải để sao chép link gửi cho bạn bè!`,
-        timestamp: Date.now(),
-        isSystem: true,
-      });
+      uiManager.addSystemChat(`Đã tạo phòng [${res.roomId}]: ${payload.roomName}. Bấm nút "MỜI" ở góc phải để sao chép link gửi cho bạn bè!`);
     }
   });
 });
@@ -114,14 +117,7 @@ uiManager.setJoinRoomHandler((roomId, name) => {
   networkManager.joinRoom(roomId, name, (res) => {
     if (res && res.roomId) {
       uiManager.setRoomId(res.roomId);
-      uiManager.addChatMessage({
-        id: `room_joined_${Date.now()}`,
-        senderId: 'system',
-        senderName: 'HỆ THỐNG',
-        text: `Đã vào phòng [${res.roomId}].`,
-        timestamp: Date.now(),
-        isSystem: true,
-      });
+      uiManager.addSystemChat(`Đã vào phòng [${res.roomId}].`);
     }
   });
 });
@@ -160,14 +156,7 @@ uiManager.setActionTriggerHandler((targetId, actionType) => {
       uiManager.showBodyguardResult(res);
     }
     if (res && res.message) {
-      uiManager.addChatMessage({
-        id: `sys_action_${Date.now()}`,
-        senderId: 'system',
-        senderName: 'HỆ THỐNG',
-        text: res.message,
-        timestamp: Date.now(),
-        isSystem: true,
-      });
+      uiManager.addSystemChat(res.message);
     }
   });
 });
@@ -177,14 +166,7 @@ uiManager.setSeerActionHandler((targetId) => {
   networkManager.sendSeerCheck(targetId, (res) => {
     if (res) {
       uiManager.showSeerResult(res);
-      uiManager.addChatMessage({
-        id: `seer_${Date.now()}`,
-        senderId: 'system',
-        senderName: 'TIÊN TRI',
-        text: `Bạn vừa soi học sinh [${res.targetPlayerName}]: Thân phận là ${res.isWerewolf ? 'MA SÓI' : 'NGƯỜI LÀNH'}.`,
-        timestamp: Date.now(),
-        isSystem: true,
-      });
+      uiManager.addSystemChat(`Bạn vừa soi học sinh [${res.targetPlayerName}]: Thân phận là ${res.isWerewolf ? 'MA SÓI' : 'NGƯỜI LÀNH'}.`, 'TIÊN TRI');
     }
   });
 });
@@ -193,14 +175,7 @@ uiManager.setSeerActionHandler((targetId) => {
 uiManager.setWitchActionHandler((useHeal, poisonTargetId) => {
   networkManager.sendWitchAction(useHeal, poisonTargetId, (res) => {
     if (res && res.message) {
-      uiManager.addChatMessage({
-        id: `witch_${Date.now()}`,
-        senderId: 'system',
-        senderName: 'PHÙ THỦY',
-        text: res.message,
-        timestamp: Date.now(),
-        isSystem: true,
-      });
+      uiManager.addSystemChat(res.message, 'PHÙ THỦY');
     }
   });
 });
@@ -209,14 +184,7 @@ uiManager.setWitchActionHandler((useHeal, poisonTargetId) => {
 uiManager.setHunterShootHandler((targetId) => {
   networkManager.sendHunterShoot(targetId, (res) => {
     if (res && res.success) {
-      uiManager.addChatMessage({
-        id: `hunter_${Date.now()}`,
-        senderId: 'system',
-        senderName: 'THỢ SĂN',
-        text: 'Phát súng của bạn đã được khai hỏa!',
-        timestamp: Date.now(),
-        isSystem: true,
-      });
+      uiManager.addSystemChat('Phát súng của bạn đã được khai hỏa!', 'THỢ SĂN');
     }
   });
 });
