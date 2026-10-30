@@ -65,12 +65,6 @@ modelManager.loadAllModels().catch((err) => {
   }
 });
 
-// Nút chuyển đổi mẫu nhân vật 3D (Girl <-> Cún)
-uiManager.setSwitchModelHandler(() => {
-  const newType = gameScene.switchLocalPlayerModel();
-  return newType;
-});
-
 // 3. Khởi tạo NetworkManager kết nối Socket.io
 const networkManager = new NetworkManager({
   onSelfJoined: (self, initialState) => {
@@ -156,9 +150,16 @@ uiManager.soundManager.onVoiceSamples = (samples, sampleRate) => {
 
 gameScene.setNetworkManager(networkManager);
 
+// Nút chuyển đổi mẫu nhân vật 3D (Girl <-> Cún) trên HUD
+uiManager.setSwitchModelHandler(() => {
+  const newType = gameScene.switchLocalPlayerModel();
+  networkManager.sendSwitchAvatar(newType);
+  return newType;
+});
+
 // 4. Kết nối các hành động từ UI lên Network
-uiManager.setJoinHandler((nickname: string) => {
-  networkManager.connect(nickname);
+uiManager.setJoinHandler((nickname: string, avatar?: 'girl' | 'cun') => {
+  networkManager.connect(nickname, 'SANH-CHINH', false, avatar || 'girl');
 });
 
 // Tạo phòng mới (chế độ 9-13 người hoặc 14-16 người)
@@ -172,8 +173,8 @@ uiManager.setCreateRoomHandler((payload) => {
 });
 
 // Vào phòng có sẵn bằng mã phòng
-uiManager.setJoinRoomHandler((roomId, name) => {
-  networkManager.joinRoom(roomId, name, (res) => {
+uiManager.setJoinRoomHandler((roomId, name, avatar) => {
+  networkManager.joinRoom(roomId, name, avatar || 'girl', (res) => {
     if (res && res.roomId) {
       uiManager.setRoomId(res.roomId);
       uiManager.addSystemChat(`Đã vào phòng [${res.roomId}].`);

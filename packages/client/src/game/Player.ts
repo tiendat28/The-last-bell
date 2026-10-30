@@ -47,15 +47,8 @@ export class PlayerMesh {
 
     this.group = new THREE.Group();
 
-    // 1. Phân loại mô hình 3D: Sói dùng cun.glb, học sinh dùng girl.glb (xen kẽ cho các Bot)
-    if (this.role === 'WEREWOLF') {
-      this.modelType = 'cun';
-    } else if (!isLocal) {
-      const hash = this.id.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
-      this.modelType = hash % 2 === 0 ? 'girl' : 'cun';
-    } else {
-      this.modelType = 'girl';
-    }
+    // 1. Phân loại mô hình 3D: Dùng avatar được người chơi chọn hoặc server gán ngẫu nhiên cho Bot
+    this.modelType = playerData.avatar === 'cun' ? 'cun' : 'girl';
 
     // 2. Tạo khối hình học dự phòng (hiện khi mô hình GLTF 3D chưa tải xong)
     const colors = this.getRoleColors(this.role, this.isLocal);
@@ -221,6 +214,9 @@ export class PlayerMesh {
   }
 
   private getRoleColors(role: PlayerRole, isLocal: boolean): { base: number; emissive: number; visor: number } {
+    if (!isLocal) {
+      return { base: 0x64748b, emissive: 0x1e293b, visor: 0xcbd5e1 };
+    }
     if (role === 'WEREWOLF') {
       return { base: 0x991b1b, emissive: 0x450a0a, visor: 0xff0033 };
     }
@@ -240,9 +236,7 @@ export class PlayerMesh {
       return { base: 0x0284c7, emissive: 0x075985, visor: 0x38bdf8 };
     }
     // VILLAGER
-    return isLocal
-      ? { base: 0x00ff88, emissive: 0x004422, visor: 0x55ffff }
-      : { base: 0x64748b, emissive: 0x1e293b, visor: 0xcbd5e1 };
+    return { base: 0x00ff88, emissive: 0x004422, visor: 0x55ffff };
   }
 
   /**
@@ -405,11 +399,11 @@ export class PlayerMesh {
       const colors = this.getRoleColors(this.role, this.isLocal);
       (this.bodyMesh.material as THREE.MeshStandardMaterial).color.setHex(colors.base);
       (this.visorMesh.material as THREE.MeshBasicMaterial).color.setHex(colors.visor);
+    }
 
-      // Nếu hóa Sói: tự động đổi sang mô hình cun.glb
-      if (this.role === 'WEREWOLF' && this.modelType !== 'cun') {
-        this.switchModel('cun');
-      }
+    // Đổi mô hình 3D khi avatar đồng bộ từ Server thay đổi
+    if (state.avatar && state.avatar !== this.modelType) {
+      this.switchModel(state.avatar);
     }
 
     if (Math.abs(this.currentHp - state.hp) > 0.1) {

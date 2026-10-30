@@ -58,7 +58,12 @@ export class NetworkManager {
     this.callbacks = callbacks;
   }
 
-  public connect(nickname: string, roomId: string = 'SANH-CHINH', skipAutoJoin: boolean = false): void {
+  public connect(
+    nickname: string,
+    roomId: string = 'SANH-CHINH',
+    skipAutoJoin: boolean = false,
+    avatar: 'girl' | 'cun' = 'girl'
+  ): void {
     const envServerUrl = (import.meta as any).env?.VITE_SERVER_URL as string | undefined;
     const isLocalDev =
       window.location.hostname === 'localhost' ||
@@ -74,7 +79,7 @@ export class NetworkManager {
     this.currentRoomId = roomId;
 
     this.socket = io(serverUrl, {
-      query: { name: nickname, roomId, skipAutoJoin: skipAutoJoin ? 'true' : 'false' },
+      query: { name: nickname, roomId, skipAutoJoin: skipAutoJoin ? 'true' : 'false', avatar },
       transports: ['websocket', 'polling'],
       reconnectionAttempts: 10,
       reconnectionDelay: 1000,
@@ -175,9 +180,14 @@ export class NetworkManager {
     return this.currentRoomId;
   }
 
-  private ensureConnectedAndEmit(name: string, roomId: string, emitFn: () => void): void {
+  private ensureConnectedAndEmit(
+    name: string,
+    roomId: string,
+    emitFn: () => void,
+    avatar?: 'girl' | 'cun'
+  ): void {
     if (!this.socket) {
-      this.connect(name, roomId, true);
+      this.connect(name, roomId, true, avatar || 'girl');
     }
     if (this.socket) {
       if (!this.isConnected) {
@@ -194,16 +204,26 @@ export class NetworkManager {
         if (res && res.roomId) this.currentRoomId = res.roomId;
         if (callback) callback(res);
       });
-    });
+    }, payload.avatar);
   }
 
-  public joinRoom(roomId: string, name: string, callback?: (res: any) => void): void {
+  public joinRoom(
+    roomId: string,
+    name: string,
+    avatar: 'girl' | 'cun' = 'girl',
+    callback?: (res: any) => void
+  ): void {
     this.ensureConnectedAndEmit(name, roomId, () => {
-      this.socket?.emit(SOCKET_EVENTS.JOIN_ROOM, { roomId, name }, (res: any) => {
+      this.socket?.emit(SOCKET_EVENTS.JOIN_ROOM, { roomId, name, avatar }, (res: any) => {
         if (res && res.roomId) this.currentRoomId = res.roomId;
         if (callback) callback(res);
       });
-    });
+    }, avatar);
+  }
+
+  public sendSwitchAvatar(avatar: 'girl' | 'cun'): void {
+    if (!this.socket || !this.isConnected) return;
+    this.socket.emit('switch_avatar', { avatar });
   }
 
   public fillBots(targetCount: number): void {

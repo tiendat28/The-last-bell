@@ -253,7 +253,8 @@ export class GameScene {
   }
 
   private checkNearbyTargetForAction(): void {
-    if (!this.localPlayer || !this.localPlayer.isAlive) {
+    // Chế độ Truyền Thống (Classic) không có cơ chế áp sát cắn trực tiếp, chỉ dùng Vote Đêm
+    if (this.uiManager.isClassic() || !this.localPlayer || !this.localPlayer.isAlive) {
       this.uiManager.updateActionButton(null);
       return;
     }

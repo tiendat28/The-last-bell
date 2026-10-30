@@ -194,10 +194,13 @@ export class UIManager {
   private cachedPlayers: PlayerState[] = [];
   private myPlayerId: string = '';
 
+  // Ngoại hình 3D mặc định
+  public selectedAvatar: 'girl' | 'cun' = 'girl';
+
   // Callbacks
-  private onJoinGameCallback?: (name: string) => void;
+  private onJoinGameCallback?: (name: string, avatar?: 'girl' | 'cun') => void;
   private onCreateRoomCallback?: (payload: RoomCreatePayload) => void;
-  private onJoinRoomCallback?: (roomId: string, name: string) => void;
+  private onJoinRoomCallback?: (roomId: string, name: string, avatar?: 'girl' | 'cun') => void;
   private onFillBotsCallback?: (targetCount: number) => void;
   private onAddBotCallback?: () => void;
   private onClearBotsCallback?: () => void;
@@ -391,6 +394,24 @@ export class UIManager {
     this.elTabBtnCreate.addEventListener('click', () => this.switchTab('create'));
     this.elTabBtnJoin.addEventListener('click', () => this.switchTab('join'));
 
+    // Chọn Ngoại Hình Nhân Vật 3D (Girl / Cún)
+    const avatarBtns = document.querySelectorAll('.avatar-option-btn');
+    avatarBtns.forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const avatar = (btn.getAttribute('data-avatar') as 'girl' | 'cun') || 'girl';
+        this.selectedAvatar = avatar;
+        avatarBtns.forEach((b) => {
+          if (b.getAttribute('data-avatar') === avatar) {
+            b.classList.add('active');
+          } else {
+            b.classList.remove('active');
+          }
+        });
+        this.updateSwitchModelButton(avatar);
+      });
+    });
+
     // Đổi Chế Độ Phân Vai (9-13 người hoặc 14-16 người)
     this.elSelectRoomMode.addEventListener('change', () => {
       this.updateTargetCountOptions(this.elSelectRoomMode.value);
@@ -416,9 +437,10 @@ export class UIManager {
           edition,
           targetCount,
           enableBots,
+          avatar: this.selectedAvatar,
         });
       } else if (this.onJoinGameCallback) {
-        this.onJoinGameCallback(name);
+        this.onJoinGameCallback(name, this.selectedAvatar);
       }
     });
 
@@ -452,9 +474,9 @@ export class UIManager {
       this.soundManager.playActionBeep();
 
       if (this.onJoinRoomCallback) {
-        this.onJoinRoomCallback(roomId, name);
+        this.onJoinRoomCallback(roomId, name, this.selectedAvatar);
       } else if (this.onJoinGameCallback) {
-        this.onJoinGameCallback(name);
+        this.onJoinGameCallback(name, this.selectedAvatar);
       }
     });
 
@@ -699,9 +721,9 @@ export class UIManager {
   }
 
   // Setters Callbacks
-  public setJoinHandler(cb: (name: string) => void) { this.onJoinGameCallback = cb; }
+  public setJoinHandler(cb: (name: string, avatar?: 'girl' | 'cun') => void) { this.onJoinGameCallback = cb; }
   public setCreateRoomHandler(cb: (payload: RoomCreatePayload) => void) { this.onCreateRoomCallback = cb; }
-  public setJoinRoomHandler(cb: (roomId: string, name: string) => void) { this.onJoinRoomCallback = cb; }
+  public setJoinRoomHandler(cb: (roomId: string, name: string, avatar?: 'girl' | 'cun') => void) { this.onJoinRoomCallback = cb; }
   public setFillBotsHandler(cb: (targetCount: number) => void) { this.onFillBotsCallback = cb; }
   public setAddBotHandler(cb: () => void) { this.onAddBotCallback = cb; }
   public setClearBotsHandler(cb: () => void) { this.onClearBotsCallback = cb; }
@@ -817,6 +839,9 @@ export class UIManager {
   public updatePlayerInfo(player: PlayerState): void {
     this.myPlayerId = player.id;
     this.currentRole = player.role;
+    if (player.avatar) {
+      this.updateSwitchModelButton(player.avatar);
+    }
 
     const hp = Math.max(0, Math.round(player.hp));
     const maxHp = player.maxHp || GAME_CONFIG.PLAYER_MAX_HP;
@@ -922,8 +947,8 @@ export class UIManager {
 
     const isNight = this.currentPhase === GAME_PHASE.NIGHT;
 
-    // Nếu là Ma Sói đang áp sát con mồi trong đêm: ưu tiên hiện nút đỏ CẮN MỤC TIÊU
-    if (isNight && this.currentRole === 'WEREWOLF' && this.currentActionData) {
+    // Nếu là Ma Sói đang áp sát con mồi trong đêm: chỉ hiện nút đỏ CẮN MỤC TIÊU ở bản Biến Thể (SPINOFF)
+    if (!this.isClassic() && isNight && this.currentRole === 'WEREWOLF' && this.currentActionData) {
       this.elSpecialRolePanel.classList.add('hidden');
       this.elActionIcon.textContent = '🐺';
       this.elActionText.textContent = `CẮN MỤC TIÊU (${this.currentActionData.distance.toFixed(1)}m)`;

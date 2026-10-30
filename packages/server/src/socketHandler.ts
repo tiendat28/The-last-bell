@@ -98,12 +98,13 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
     const enterRoom = async (
       gm: GameManager,
       playerName?: string,
+      avatar?: 'girl' | 'cun',
       callback?: (res: any) => void
     ) => {
       leaveAllGameRooms();
       bindGameManagerEvents(gm);
 
-      const player = gm.addPlayer(socket.id, playerName);
+      const player = gm.addPlayer(socket.id, playerName, avatar);
       roomManager.registerPlayerToRoom(socket.id, gm.roomId);
       socket.join(gm.roomId);
 
@@ -144,17 +145,17 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
       if (payload.enableBots) {
         gm.fillBotsToTarget(gm.targetCount);
       }
-      await enterRoom(gm, payload.name, callback);
+      await enterRoom(gm, payload.name, payload.avatar, callback);
     });
 
     // 2. Tham gia phòng
-    socket.on(SOCKET_EVENTS.JOIN_ROOM, async (payload: { roomId: string; name: string }, callback?: (res: any) => void) => {
+    socket.on(SOCKET_EVENTS.JOIN_ROOM, async (payload: { roomId: string; name: string; avatar?: 'girl' | 'cun' }, callback?: (res: any) => void) => {
       const gm = roomManager.getRoom(payload.roomId) || roomManager.getRoom('SANH-CHINH');
       if (!gm) {
         if (callback) callback({ success: false, message: 'Không tìm thấy phòng!' });
         return;
       }
-      await enterRoom(gm, payload.name, callback);
+      await enterRoom(gm, payload.name, payload.avatar, callback);
     });
 
     // 3. Kết nối mặc định (chỉ chạy khi không phải kết nối qua CreateRoom / JoinRoom)
@@ -162,11 +163,20 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
     if (!skipAutoJoin) {
       const initialName = socket.handshake.query.name as string | undefined;
       const initialRoomId = (socket.handshake.query.roomId as string) || 'SANH-CHINH';
+      const initialAvatar = (socket.handshake.query.avatar as string) === 'cun' ? 'cun' : 'girl';
       const gm = roomManager.getRoom(initialRoomId) || roomManager.getRoom('SANH-CHINH');
       if (gm) {
-        enterRoom(gm, initialName);
+        enterRoom(gm, initialName, initialAvatar);
       }
     }
+
+    // Đổi Avatar ngoại hình 3D trong trận đấu
+    socket.on('switch_avatar', (payload: { avatar: 'girl' | 'cun' }) => {
+      const room = getCurrentRoom();
+      if (!room || !payload?.avatar) return;
+      room.setPlayerAvatar(socket.id, payload.avatar);
+      io.to(room.roomId).emit(SOCKET_EVENTS.SYNC_STATE, room.getGameState());
+    });
 
     // 4. Bắt đầu trận đấu
     socket.on(SOCKET_EVENTS.START_GAME, () => {

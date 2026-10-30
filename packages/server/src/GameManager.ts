@@ -195,7 +195,7 @@ export class GameManager {
     }
   }
 
-  public addPlayer(id: string, name?: string): PlayerState {
+  public addPlayer(id: string, name?: string, avatar?: 'girl' | 'cun'): PlayerState {
     const angle = Math.random() * Math.PI * 2;
     const distance = Math.random() * 20;
     const spawnX = Math.cos(angle) * distance;
@@ -205,6 +205,7 @@ export class GameManager {
       id,
       name: name && name.trim() ? name.trim() : `Học sinh #${id.substring(0, 4)}`,
       role: 'VILLAGER',
+      avatar: avatar === 'cun' ? 'cun' : 'girl',
       hp: GAME_CONFIG.PLAYER_MAX_HP,
       maxHp: GAME_CONFIG.PLAYER_MAX_HP,
       position: {
@@ -259,6 +260,7 @@ export class GameManager {
       id: botId,
       name,
       role: 'VILLAGER',
+      avatar: Math.random() < 0.5 ? 'girl' : 'cun',
       hp: GAME_CONFIG.PLAYER_MAX_HP,
       maxHp: GAME_CONFIG.PLAYER_MAX_HP,
       position: { x: Number(rx.toFixed(1)), y: GAME_CONFIG.PLAYER_HEIGHT / 2, z: Number(rz.toFixed(1)) },
@@ -271,8 +273,15 @@ export class GameManager {
     };
 
     this.players.set(botId, botPlayer);
-    console.log(`[GameManager] Đã thêm ${name} vào phòng ${this.roomId}`);
+    console.log(`[GameManager] Đã thêm ${name} (${botPlayer.avatar}) vào phòng ${this.roomId}`);
     return botPlayer;
+  }
+
+  public setPlayerAvatar(id: string, avatar: 'girl' | 'cun'): boolean {
+    const p = this.players.get(id);
+    if (!p) return false;
+    p.avatar = avatar === 'cun' ? 'cun' : 'girl';
+    return true;
   }
 
   /**

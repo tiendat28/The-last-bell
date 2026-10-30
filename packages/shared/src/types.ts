@@ -12,6 +12,7 @@ export interface PlayerState {
   id: string;
   name: string;
   role: PlayerRole;
+  avatar?: 'girl' | 'cun';
   hp: number;
   maxHp: number;
   position: Vector3D;
@@ -53,6 +54,7 @@ export interface RoomCreatePayload {
   edition?: GameEditionType;
   targetCount: number;
   enableBots: boolean;
+  avatar?: 'girl' | 'cun';
 }
 
 export interface ChatMessage {
