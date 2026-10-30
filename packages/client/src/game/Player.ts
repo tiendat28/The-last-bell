@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { PlayerState, PlayerRole, GAME_CONFIG } from '@sinh-ton/shared';
+import { ModelManager, ModelType } from './ModelManager';
 
-// Dùng chung Geometry tĩnh cho toàn bộ nhân vật để tránh cấp phát bộ nhớ GPU lặp lại
+// Dùng chung Geometry tĩnh dự phòng cho nhân vật khi mô hình 3D chưa nạp xong
 const SHARED_BODY_GEO = new THREE.BoxGeometry(0.8, 1.2, 0.5);
 const SHARED_HEAD_GEO = new THREE.BoxGeometry(0.5, 0.5, 0.5);
 const SHARED_VISOR_GEO = new THREE.BoxGeometry(0.4, 0.15, 0.1);
@@ -19,6 +20,11 @@ export class PlayerMesh {
   public visorMesh: THREE.Mesh;
   public nameSprite: THREE.Sprite;
   public hpBarSprite: THREE.Sprite;
+
+  // Mô hình 3D thực tế (girl.glb hoặc cun.glb)
+  public modelType: ModelType = 'girl';
+  public characterModel: THREE.Group | null = null;
+  private animTimer: number = 0;
 
   // Vòng hào quang quanh nhân vật Sói (Bán kính 2.2 mét - dùng MeshBasicMaterial nhẹ, không gây recompile shader)
   private wolfAuraMesh!: THREE.Mesh;
@@ -41,7 +47,17 @@ export class PlayerMesh {
 
     this.group = new THREE.Group();
 
-    // 1. Màu sắc nhân vật dựa theo vai trò & bản thân
+    // 1. Phân loại mô hình 3D: Sói dùng cun.glb, học sinh dùng girl.glb (xen kẽ cho các Bot)
+    if (this.role === 'WEREWOLF') {
+      this.modelType = 'cun';
+    } else if (!isLocal) {
+      const hash = this.id.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+      this.modelType = hash % 2 === 0 ? 'girl' : 'cun';
+    } else {
+      this.modelType = 'girl';
+    }
+
+    // 2. Tạo khối hình học dự phòng (hiện khi mô hình GLTF 3D chưa tải xong)
     const colors = this.getRoleColors(this.role, this.isLocal);
 
     // Thân (Body)
@@ -75,24 +91,133 @@ export class PlayerMesh {
     this.visorMesh.position.set(0, 1.45, 0.26);
     this.group.add(this.visorMesh);
 
-    // 2. Nametag & Role Badge trên đầu
+    // 3. Nametag & Role Badge trên đầu
     this.nameSprite = this.createNameSprite(playerData.name, this.role);
     this.nameSprite.position.y = 2.25;
     this.group.add(this.nameSprite);
 
-    // 3. Mini HP Bar 3D
+    // 4. Mini HP Bar 3D
     this.hpBarSprite = this.createHpBarSprite(this.currentHp, this.maxHp);
     this.hpBarSprite.position.y = 1.95;
     this.group.add(this.hpBarSprite);
 
-    // 4. Hào quang quanh Sói (Bán kính 2 mét)
+    // 5. Hào quang quanh Sói (Bán kính 2 mét)
     this.initWolfAura();
+
+    // 6. Gắn mô hình 3D thực tế nếu ModelManager đã nạp xong
+    this.tryAttachModel();
 
     // Vị trí ban đầu
     this.group.position.set(playerData.position.x, playerData.position.y, playerData.position.z);
     this.group.rotation.y = playerData.rotationY || 0;
     this.targetPosition.copy(this.group.position);
     this.targetRotationY = this.group.rotation.y;
+  }
+
+  /**
+   * Thử nạp mô hình 3D thực tế (girl.glb hoặc cun.glb) từ ModelManager
+   */
+  public tryAttachModel(): boolean {
+    const modelManager = ModelManager.getInstance();
+    if (!modelManager.isReady()) return false;
+
+    const cloned = modelManager.getModel(this.modelType);
+    if (!cloned) return false;
+
+    this.attachCharacterModel(cloned, this.modelType);
+    return true;
+  }
+
+  /**
+   * Gắn mô hình 3D vào nhân vật và ẩn các khối hình học dự phòng
+   */
+  public attachCharacterModel(model: THREE.Group, type: ModelType): void {
+    if (this.characterModel) {
+      this.group.remove(this.characterModel);
+      this.characterModel = null;
+    }
+
+    this.modelType = type;
+    this.characterModel = model;
+    this.group.add(model);
+
+    // Ẩn các khối hình hộp placeholder
+    this.bodyMesh.visible = false;
+    this.headMesh.visible = false;
+    this.visorMesh.visible = false;
+
+    // Cập nhật shadow phù hợp: người chơi chính cast shadow, remote nhận shadow
+    model.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        const mesh = child as THREE.Mesh;
+        mesh.castShadow = this.isLocal;
+        mesh.receiveShadow = true;
+      }
+    });
+
+    // Điều chỉnh vị trí nametag và thanh máu khớp với chiều cao mô hình
+    if (type === 'girl') {
+      this.nameSprite.position.y = 2.3;
+      this.hpBarSprite.position.y = 2.05;
+    } else {
+      this.nameSprite.position.y = 1.85;
+      this.hpBarSprite.position.y = 1.62;
+    }
+
+    // Đồng bộ trạng thái hồn ma nếu nhân vật đã chết
+    if (!this.isAlive) {
+      this.setModelGhostState(true);
+    }
+  }
+
+  /**
+   * Đổi loại mô hình 3D trực tiếp (Girl <-> Cún)
+   */
+  public switchModel(type: ModelType): void {
+    this.modelType = type;
+    const model = ModelManager.getInstance().getModel(type);
+    if (model) {
+      this.attachCharacterModel(model, type);
+    }
+  }
+
+  private setModelGhostState(isGhost: boolean): void {
+    if (!this.characterModel) return;
+    this.characterModel.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        const mat = (child as THREE.Mesh).material;
+        if (mat) {
+          if (Array.isArray(mat)) {
+            mat.forEach((m) => {
+              m.transparent = isGhost;
+              m.opacity = isGhost ? 0.35 : 1.0;
+            });
+          } else {
+            mat.transparent = isGhost;
+            mat.opacity = isGhost ? 0.35 : 1.0;
+          }
+        }
+      }
+    });
+  }
+
+  /**
+   * Hiệu ứng chuyển động tự nhiên (nhấp nhô nhịp bước chân khi chạy, thở nhẹ khi đứng yên)
+   */
+  public updateAnimation(deltaTime: number, isMoving: boolean): void {
+    if (!this.characterModel || !this.isAlive) return;
+    this.animTimer += deltaTime;
+
+    if (isMoving) {
+      const bob = Math.sin(this.animTimer * 12) * 0.04;
+      const tilt = Math.sin(this.animTimer * 6) * 0.02;
+      this.characterModel.position.y = bob;
+      this.characterModel.rotation.z = tilt;
+    } else {
+      const breath = Math.sin(this.animTimer * 2.5) * 0.012;
+      this.characterModel.position.y = breath;
+      this.characterModel.rotation.z = 0;
+    }
   }
 
   private getRoleColors(role: PlayerRole, isLocal: boolean): { base: number; emissive: number; visor: number } {
@@ -280,6 +405,11 @@ export class PlayerMesh {
       const colors = this.getRoleColors(this.role, this.isLocal);
       (this.bodyMesh.material as THREE.MeshStandardMaterial).color.setHex(colors.base);
       (this.visorMesh.material as THREE.MeshBasicMaterial).color.setHex(colors.visor);
+
+      // Nếu hóa Sói: tự động đổi sang mô hình cun.glb
+      if (this.role === 'WEREWOLF' && this.modelType !== 'cun') {
+        this.switchModel('cun');
+      }
     }
 
     if (Math.abs(this.currentHp - state.hp) > 0.1) {
@@ -301,9 +431,11 @@ export class PlayerMesh {
         bMat.opacity = 0.35;
         bMat.color.setHex(0x94a3b8);
         this.wolfAuraMesh.visible = false;
+        this.setModelGhostState(true);
       } else {
         bMat.transparent = false;
         bMat.opacity = 1.0;
+        this.setModelGhostState(false);
       }
     }
   }
@@ -316,8 +448,11 @@ export class PlayerMesh {
     if (distSq > 225) {
       this.group.position.copy(this.targetPosition);
       this.group.rotation.y = this.targetRotationY;
+      this.updateAnimation(deltaTime, false);
       return;
     }
+
+    const isMoving = distSq > 0.005;
 
     // Nội suy mượt mà, hạn chế rung giật khi bot di chuyển
     const lerpFactor = Math.min(1, deltaTime * 12);
@@ -327,6 +462,8 @@ export class PlayerMesh {
     while (diff < -Math.PI) diff += Math.PI * 2;
     while (diff > Math.PI) diff -= Math.PI * 2;
     this.group.rotation.y += diff * lerpFactor;
+
+    this.updateAnimation(deltaTime, isMoving);
   }
 
   public setPosition(x: number, y: number, z: number): void {
@@ -348,6 +485,10 @@ export class PlayerMesh {
   }
 
   public destroy(): void {
+    if (this.characterModel) {
+      this.group.remove(this.characterModel);
+      this.characterModel = null;
+    }
     (this.bodyMesh.material as THREE.Material).dispose();
     (this.headMesh.material as THREE.Material).dispose();
     (this.visorMesh.material as THREE.Material).dispose();

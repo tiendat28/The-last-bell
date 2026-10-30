@@ -62,6 +62,7 @@ export class UIManager {
   private elBtnRespawn: HTMLButtonElement;
   private elBtnBackLobby: HTMLButtonElement;
   private elBtnGhostLeave: HTMLButtonElement | null;
+  private elBtnSwitchModel: HTMLButtonElement | null;
   private elBtnServerLeave: HTMLButtonElement | null;
   private elBtnStartGame: HTMLButtonElement;
 
@@ -210,6 +211,7 @@ export class UIManager {
   private onSendChatCallback?: (text: string) => void;
   private onCheatSetRoleCallback?: (role: PlayerRole) => void;
   private onToggleDoorCallback?: (doorId: string) => void;
+  private onSwitchModelCallback?: () => 'girl' | 'cun';
   private elDoorBtn!: HTMLButtonElement;
   private currentDoorId: string | null = null;
   private lastDoorBtnSig: string = '';
@@ -234,6 +236,7 @@ export class UIManager {
     this.elBtnRespawn = document.getElementById('btn-respawn') as HTMLButtonElement;
     this.elBtnBackLobby = document.getElementById('btn-back-lobby') as HTMLButtonElement;
     this.elBtnGhostLeave = document.getElementById('btn-ghost-leave') as HTMLButtonElement;
+    this.elBtnSwitchModel = document.getElementById('btn-switch-model') as HTMLButtonElement | null;
     this.elBtnServerLeave = document.getElementById('btn-server-leave') as HTMLButtonElement;
     this.elBtnStartGame = document.getElementById('btn-start-game') as HTMLButtonElement;
 
@@ -532,6 +535,17 @@ export class UIManager {
     if (this.elBtnGhostLeave) this.elBtnGhostLeave.addEventListener('click', returnToLobbyAction);
     if (this.elBtnServerLeave) this.elBtnServerLeave.addEventListener('click', returnToLobbyAction);
 
+    // Nút Đổi mẫu 3D (Girl / Cún)
+    if (this.elBtnSwitchModel) {
+      this.elBtnSwitchModel.addEventListener('click', () => {
+        this.soundManager.playActionBeep();
+        if (this.onSwitchModelCallback) {
+          const newType = this.onSwitchModelCallback();
+          this.updateSwitchModelButton(newType);
+        }
+      });
+    }
+
     // Action button Sói cắn
     this.elBtnAction.addEventListener('click', () => this.triggerCurrentAction());
     window.addEventListener('keydown', (e) => {
@@ -701,6 +715,18 @@ export class UIManager {
   public setSendChatHandler(cb: (text: string) => void) { this.onSendChatCallback = cb; }
   public setCheatRoleHandler(cb: (role: PlayerRole) => void) { this.onCheatSetRoleCallback = cb; }
   public setToggleDoorHandler(cb: (doorId: string) => void) { this.onToggleDoorCallback = cb; }
+  public setSwitchModelHandler(cb: () => 'girl' | 'cun') { this.onSwitchModelCallback = cb; }
+
+  public updateSwitchModelButton(type: 'girl' | 'cun'): void {
+    if (!this.elBtnSwitchModel) return;
+    if (type === 'girl') {
+      this.elBtnSwitchModel.textContent = '👧 MẪU: NỮ SINH (GIRL)';
+      this.elBtnSwitchModel.className = 'model-switch-btn';
+    } else {
+      this.elBtnSwitchModel.textContent = '🐺 MẪU: CÚN (CUN)';
+      this.elBtnSwitchModel.className = 'model-switch-btn cun';
+    }
+  }
 
   public updateDoorButton(data: { doorId: string; roomName: string; isOpen: boolean } | null): void {
     const sig = data ? `${data.doorId}_${data.isOpen}` : 'null';

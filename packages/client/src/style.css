@@ -202,6 +202,46 @@ body, html {
   gap: 6px;
 }
 
+/* Nút Đổi Mẫu Nhân Vật 3D (Girl / Cún) để test trực tiếp */
+.model-switch-btn {
+  margin-top: 6px;
+  width: 100%;
+  padding: 5px 8px;
+  background: linear-gradient(135deg, rgba(79, 70, 229, 0.8), rgba(6, 182, 212, 0.8));
+  border: 1px solid rgba(129, 140, 248, 0.7);
+  border-radius: 8px;
+  color: #ffffff;
+  font-family: 'Chakra Petch', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.4);
+  pointer-events: auto;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.model-switch-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 18px rgba(6, 182, 212, 0.7);
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.95), rgba(14, 165, 233, 0.95));
+}
+
+.model-switch-btn.cun {
+  background: linear-gradient(135deg, rgba(220, 38, 38, 0.85), rgba(245, 158, 11, 0.85));
+  border-color: rgba(248, 113, 113, 0.8);
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.45);
+}
+
+.model-switch-btn.cun:hover {
+  box-shadow: 0 0 18px rgba(245, 158, 11, 0.75);
+}
+
 .ghost-leave-btn:hover {
   transform: translateY(-1px);
   box-shadow: 0 0 20px rgba(239, 68, 68, 0.7);
@@ -2325,4 +2365,181 @@ body, html {
 
 .hidden {
   display: none !important;
+}
+
+/* ============================================================
+   LOADING SCREEN: TẢI MÔ HÌNH 3D (girl.glb & cun.glb)
+   ============================================================ */
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  background: radial-gradient(circle at center, #111425 0%, #06070d 100%);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 100000;
+  pointer-events: auto;
+  transition: opacity 0.6s ease, transform 0.6s ease;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.loading-overlay.fade-out {
+  opacity: 0;
+  transform: scale(1.03);
+  pointer-events: none;
+}
+
+.loading-modal-card {
+  width: 100%;
+  max-width: 480px;
+  background: rgba(13, 16, 26, 0.96);
+  border: 1px solid rgba(139, 92, 246, 0.45);
+  box-shadow: 0 0 50px rgba(124, 58, 237, 0.35), inset 0 0 25px rgba(0, 0, 0, 0.6);
+  border-radius: 16px;
+  padding: 28px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.loading-icon-glow {
+  font-size: 2.6rem;
+  margin-bottom: 8px;
+  filter: drop-shadow(0 0 16px rgba(168, 85, 247, 0.7));
+  animation: pulseEmoji 2s infinite ease-in-out;
+}
+
+@keyframes pulseEmoji {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 12px rgba(168, 85, 247, 0.6)); }
+  50% { transform: scale(1.08); filter: drop-shadow(0 0 24px rgba(6, 182, 212, 0.9)); }
+}
+
+.loading-title {
+  font-family: 'Chakra Petch', sans-serif;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #f8fafc;
+  letter-spacing: 1.5px;
+  margin: 0 0 4px 0;
+  text-shadow: 0 0 15px rgba(168, 85, 247, 0.5);
+}
+
+.loading-subtitle {
+  font-size: 0.76rem;
+  color: #94a3b8;
+  margin: 0 0 20px 0;
+  letter-spacing: 0.5px;
+}
+
+.loading-progress-section {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.loading-status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.loading-status-text {
+  color: #cbd5e1;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+  max-width: 75%;
+  text-align: left;
+}
+
+.loading-percent-text {
+  color: #00ff88;
+  font-size: 0.95rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 10px rgba(0, 255, 136, 0.6);
+}
+
+.loading-bar-track {
+  width: 100%;
+  height: 12px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(139, 92, 246, 0.4);
+  border-radius: 6px;
+  overflow: hidden;
+  position: relative;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.6);
+}
+
+.loading-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #7c3aed, #06b6d4, #00ff88);
+  border-radius: 6px;
+  transition: width 0.15s ease-out;
+  box-shadow: 0 0 14px rgba(0, 255, 136, 0.65);
+  position: relative;
+}
+
+.loading-bar-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.loading-details-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.68rem;
+  color: #64748b;
+}
+
+.loading-files-info {
+  color: #818cf8;
+}
+
+.loading-mb-text {
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+}
+
+.loading-tip-card {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(30, 41, 59, 0.45);
+  border: 1px dashed rgba(148, 163, 184, 0.25);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.68rem;
+  color: #cbd5e1;
+  text-align: left;
+}
+
+.loading-tip-card .tip-icon {
+  font-size: 0.95rem;
+  flex-shrink: 0;
 }

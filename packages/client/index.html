@@ -16,6 +16,36 @@
   <!-- Canvas 3D -->
   <div id="game-container"></div>
 
+  <!-- Màn hình Loading Tải Mô Hình 3D (girl.glb & cun.glb) -->
+  <div id="loading-screen" class="loading-overlay">
+    <div class="loading-modal-card">
+      <div class="loading-header">
+        <div class="loading-icon-glow">🏫</div>
+        <h1 class="loading-title">TIẾNG CHUÔNG CUỐI CÙNG</h1>
+        <div class="loading-subtitle">SINH TỒN 3D - NẠP DỮ LIỆU NHÂN VẬT HỌC ĐƯỜNG</div>
+      </div>
+
+      <div class="loading-progress-section">
+        <div class="loading-status-row">
+          <span class="loading-status-text" id="loading-status-text">Đang kết nối tài nguyên 3D...</span>
+          <span class="loading-percent-text" id="loading-percent-text">0%</span>
+        </div>
+        <div class="loading-bar-track">
+          <div class="loading-bar-fill" id="loading-bar-fill" style="width: 0%;"></div>
+        </div>
+        <div class="loading-details-row">
+          <span class="loading-files-info" id="loading-files-info">📦 /models/girl.glb &amp; /models/cun.glb</span>
+          <span class="loading-mb-text" id="loading-mb-text">0.0 MB / 139.2 MB</span>
+        </div>
+      </div>
+
+      <div class="loading-tip-card">
+        <span class="tip-icon">💡</span>
+        <span class="tip-text">Đang tải và tối ưu mô hình 3D thực tế để thay thế các khối ô vuông. Quá trình chỉ tải một lần!</span>
+      </div>
+    </div>
+  </div>
+
   <!-- HUD Overlay -->
   <div id="hud-overlay">
     <!-- Cột Trái: Thông tin nhân vật & Danh sách học sinh -->
@@ -32,6 +62,7 @@
           </div>
           <div class="hp-text" id="hud-hp-text">100 / 100 HP</div>
         </div>
+        <button id="btn-switch-model" class="model-switch-btn" title="Đổi mẫu nhân vật 3D (Girl / Cún)">👧 MẪU: NỮ SINH (GIRL)</button>
         <button id="btn-ghost-leave" class="ghost-leave-btn hidden" title="Rời chế độ quan sát về sảnh tạo phòng mới">🚪 VỀ SẢNH TẠO PHÒNG</button>
       </div>
 

@@ -11,6 +11,7 @@ import {
 import { Environment } from './Environment';
 import { InputController } from './InputController';
 import { PlayerMesh } from './Player';
+import { ModelType } from './ModelManager';
 import { NetworkManager } from '../network/NetworkManager';
 import { UIManager } from '../ui/UIManager';
 import { Minimap } from '../ui/Minimap';
@@ -325,8 +326,10 @@ export class GameScene {
       // Bất động ban đêm cho học sinh không phải Sói
       const isFrozen = isNight && !isWerewolf && this.localPlayer.isAlive && !isSpectating;
 
+      let isMoving = false;
       if (!isFrozen) {
         const movement = this.inputController.getMovement(delta);
+        isMoving = movement.moved;
 
         if (movement.moved) {
           const speedBoost = isWerewolf ? GAME_CONFIG.WEREWOLF_SPEED_BOOST : 1.0;
@@ -374,6 +377,8 @@ export class GameScene {
           }
         }
       }
+
+      this.localPlayer.updateAnimation(delta, isMoving);
 
       // Đèn tầm nhìn 5m luôn đi theo sát vị trí nhân vật chính
       const myPos = this.localPlayer.getPosition();
@@ -444,5 +449,28 @@ export class GameScene {
 
   public getCurrentPhase(): GamePhaseType {
     return this.currentPhase;
+  }
+
+  /**
+   * Kích hoạt cập nhật mô hình 3D thực tế cho tất cả nhân vật khi tải xong
+   */
+  public onModelsLoaded(): void {
+    if (this.localPlayer) {
+      this.localPlayer.tryAttachModel();
+    }
+    for (const remote of this.remotePlayers.values()) {
+      remote.tryAttachModel();
+    }
+    console.log('[GameScene] Đã nạp thành công mô hình 3D cho toàn bộ nhân vật!');
+  }
+
+  /**
+   * Đổi loại mô hình cho nhân vật chính (Girl <-> Cún)
+   */
+  public switchLocalPlayerModel(targetType?: ModelType): ModelType {
+    if (!this.localPlayer) return 'girl';
+    const next = targetType || (this.localPlayer.modelType === 'girl' ? 'cun' : 'girl');
+    this.localPlayer.switchModel(next);
+    return next;
   }
 }

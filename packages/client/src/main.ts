@@ -3,6 +3,7 @@ import { GameScene } from './game/GameScene';
 import { NetworkManager } from './network/NetworkManager';
 import { UIManager } from './ui/UIManager';
 import { LiveKitVoiceManager } from './audio/LiveKitVoiceManager';
+import { ModelManager, ModelProgressInfo } from './game/ModelManager';
 
 // 1. Khởi tạo UIManager & LiveKit Voice Manager
 const uiManager = new UIManager();
@@ -11,6 +12,64 @@ const liveKitVoiceManager = new LiveKitVoiceManager();
 // 2. Khởi tạo GameScene 3D Three.js
 const container = document.getElementById('game-container')!;
 const gameScene = new GameScene(container, uiManager);
+
+// 3. Quản lý tải mô hình 3D (girl.glb & cun.glb) kèm thanh phần trăm loading
+const elLoadingScreen = document.getElementById('loading-screen');
+const elLoadingStatusText = document.getElementById('loading-status-text');
+const elLoadingPercentText = document.getElementById('loading-percent-text');
+const elLoadingBarFill = document.getElementById('loading-bar-fill');
+const elLoadingMbText = document.getElementById('loading-mb-text');
+
+const modelManager = ModelManager.getInstance();
+modelManager.setProgressCallback((info: ModelProgressInfo) => {
+  if (elLoadingPercentText) {
+    elLoadingPercentText.textContent = `${info.percent}%`;
+  }
+  if (elLoadingBarFill) {
+    elLoadingBarFill.style.width = `${info.percent}%`;
+  }
+  if (elLoadingStatusText) {
+    elLoadingStatusText.textContent = info.currentFile;
+  }
+  if (elLoadingMbText) {
+    elLoadingMbText.textContent = `${info.loadedMB} MB / ${info.totalMB} MB`;
+  }
+
+  if (info.isComplete) {
+    if (elLoadingStatusText) {
+      elLoadingStatusText.textContent = '✅ Đã nạp thành công mô hình 3D!';
+    }
+    gameScene.onModelsLoaded();
+    setTimeout(() => {
+      if (elLoadingScreen) {
+        elLoadingScreen.classList.add('fade-out');
+        setTimeout(() => {
+          elLoadingScreen.classList.add('hidden');
+        }, 650);
+      }
+    }, 450);
+  }
+});
+
+// Bắt đầu tải mô hình
+modelManager.loadAllModels().catch((err) => {
+  console.warn('[App] Không thể nạp mô hình 3D từ /models/, sử dụng mô hình dự phòng:', err);
+  if (elLoadingScreen) {
+    if (elLoadingStatusText) {
+      elLoadingStatusText.textContent = '⚠️ Tiếp tục vào phòng với mô hình dự phòng...';
+    }
+    setTimeout(() => {
+      elLoadingScreen.classList.add('fade-out');
+      setTimeout(() => elLoadingScreen.classList.add('hidden'), 650);
+    }, 1200);
+  }
+});
+
+// Nút chuyển đổi mẫu nhân vật 3D (Girl <-> Cún)
+uiManager.setSwitchModelHandler(() => {
+  const newType = gameScene.switchLocalPlayerModel();
+  return newType;
+});
 
 // 3. Khởi tạo NetworkManager kết nối Socket.io
 const networkManager = new NetworkManager({
